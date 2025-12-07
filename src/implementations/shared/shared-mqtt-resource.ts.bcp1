@@ -1,0 +1,109 @@
+import { type Abortable } from '@xstd/abortable';
+import { ResourceFactory } from '../../../../factory/resource-factory.js';
+import { Resource } from '../../../../resource/resource.js';
+import {
+  type CloseRefCountResource,
+  RefCountResourceFactory,
+} from '../../../ref-count/ref-count-resource-factory.js';
+import { type MqttSubscriptionResource } from '../../subscription/implementations/default/subscription/mqtt-subscription-resource.js';
+import { type MqttResourceTrait } from '../../traits/mqtt-resource.trait.js';
+import { type MqttResourceOpenOptions } from '../../traits/static/types/methods/mqtt-resource-open-options.js';
+import { type MqttResourcePublishOptions } from '../../traits/types/methods/publish/mqtt-resource-publish-options.js';
+import { type MqttResourceSubscribeOptions } from '../../traits/types/methods/subscribe/mqtt-resource-subscribe-options.js';
+import { MqttResource } from '../default/mqtt-resource.js';
+
+/* TYPES */
+
+export type SharedMqttResourceFactory = ResourceFactory<
+  [url: string | URL],
+  SharedMqttResource,
+  MqttResourceOpenOptions
+>;
+
+/* CLASS */
+
+export class SharedMqttResource extends Resource implements MqttResourceTrait {
+  static maintainAlive: number = 1000;
+
+  static #activeConnections = new Map<
+    string /* key */,
+    RefCountResourceFactory<MqttResource, SharedMqttResource>
+  >();
+
+  static readonly #factory: SharedMqttResourceFactory = new ResourceFactory<
+    [url: string | URL],
+    SharedMqttResource,
+    MqttResourceOpenOptions
+  >(
+    async (
+      url: string | URL,
+      { clientId, username, password, signal }: MqttResourceOpenOptions = {},
+    ): Promise<SharedMqttResource> => {
+      signal?.throwIfAborted();
+
+      const key: string = JSON.stringify([url.toString(), clientId, username, password]);
+
+      let activeConnection: RefCountResourceFactory<MqttResource, SharedMqttResource> | undefined =
+        this.#activeConnections.get(key);
+
+      if (activeConnection === undefined) {
+        activeConnection = new RefCountResourceFactory<MqttResource, SharedMqttResource>({
+          open: (options?: Abortable): Promise<MqttResource> => {
+            return MqttResource.open(url, {
+              ...options,
+              clientId,
+              username,
+              password,
+            });
+          },
+          create: (
+            sharedResource: MqttResource,
+            close: CloseRefCountResource,
+          ): SharedMqttResource => {
+            return new SharedMqttResource(sharedResource, close).closesWith(sharedResource);
+          },
+          maintainAlive: this.maintainAlive,
+        });
+
+        this.#activeConnections.set(key, activeConnection);
+      }
+
+      return activeConnection.open({ signal });
+    },
+  );
+
+  static get factory(): SharedMqttResourceFactory {
+    return this.#factory;
+  }
+
+  static async open(
+    url: string | URL,
+    options?: MqttResourceOpenOptions,
+  ): Promise<SharedMqttResource> {
+    return this.#factory.open(url, options);
+  }
+
+  readonly #shared: MqttResource;
+
+  constructor(shared: MqttResource, close: CloseRefCountResource) {
+    super(close);
+
+    // TODO should probably use a close stack here?
+    this.#shared = shared;
+  }
+
+  publish(
+    topic: string,
+    payload: string | Uint8Array,
+    options?: MqttResourcePublishOptions,
+  ): Promise<void> {
+    return this.#shared.publish(topic, payload, options);
+  }
+
+  subscribe(
+    topic: string,
+    options?: MqttResourceSubscribeOptions,
+  ): Promise<MqttSubscriptionResource> {
+    return this.#shared.subscribe(topic, options);
+  }
+}
