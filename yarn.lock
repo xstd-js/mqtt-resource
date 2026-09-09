@@ -1061,13 +1061,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@xstd/hex@npm:^0.1.0":
-  version: 0.1.0
-  resolution: "@xstd/hex@npm:0.1.0"
-  checksum: 10c0/372b82fe4630cfee6f8ea772b39303f3846a718aa0ab519791129bac9a7d2aa08e0b3e48b1983dafba5bb82c14396ca63f0939c3770539c04662010d31ac98a5
-  languageName: node
-  linkType: hard
-
 "@xstd/listener-resource@npm:^0.1.0":
   version: 0.1.0
   resolution: "@xstd/listener-resource@npm:0.1.0"
@@ -1089,7 +1082,6 @@ __metadata:
     "@xstd/abortable": "npm:^1.2.3"
     "@xstd/async-ref-count": "npm:^0.2.0"
     "@xstd/custom-error": "npm:^0.2.0"
-    "@xstd/hex": "npm:^0.1.0"
     "@xstd/listener-resource": "npm:^0.1.0"
     "@xstd/mqtt-topic": "npm:^1.0.0"
     "@xstd/resource": "npm:^0.4.1"
