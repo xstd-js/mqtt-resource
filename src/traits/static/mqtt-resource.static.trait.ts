@@ -1,5 +1,5 @@
-import { type MqttResourceTrait } from '../mqtt-resource.trait.js';
-import { type MqttResourceOpenTrait } from './types/methods/mqtt-resource.open.trait.js';
+import { type MqttResourceTrait } from '../mqtt-resource.trait.ts';
+import { type MqttResourceOpenTrait } from './types/methods/mqtt-resource.open.trait.ts';
 
 export interface MqttResourceStaticTrait<
   GMqttResource extends MqttResourceTrait,

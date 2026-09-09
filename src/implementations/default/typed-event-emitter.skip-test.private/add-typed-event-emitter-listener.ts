@@ -1,5 +1,5 @@
-import { type EventHandler } from './event-handler.js';
-import { type TypedEventEmitter } from './typed-event-emitter.js';
+import type { EventHandler } from './event-handler.ts';
+import type { TypedEventEmitter } from './typed-event-emitter.ts';
 
 export function addTypedEventEmitterListener<
   TEvents extends Record<keyof TEvents, EventHandler>,

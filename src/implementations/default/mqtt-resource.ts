@@ -3,13 +3,13 @@ import { CompleteError } from '@xstd/custom-error';
 import { CloseStack, Resource } from '@xstd/resource';
 import mqtt, { type IDisconnectPacket, type MqttClient } from 'mqtt';
 
-import { MqttSubscriptionResource } from '../../subscription/implementations/default/subscription/mqtt-subscription-resource.js';
-import { type MqttResourceTrait } from '../../traits/mqtt-resource.trait.js';
-import { type MqttResourceOpenOptions } from '../../traits/static/types/methods/mqtt-resource-open-options.js';
-import { type MqttResourcePublishOptions } from '../../traits/types/methods/publish/mqtt-resource-publish-options.js';
-import { type MqttResourcePublishPayload } from '../../traits/types/methods/publish/mqtt-resource-publish.payload.js';
-import { type MqttResourceSubscribeOptions } from '../../traits/types/methods/subscribe/mqtt-resource-subscribe-options.js';
-import { setMqttResourceClient } from './mqtt-resource.internals.private.js';
+import { MqttSubscriptionResource } from '../../subscription/implementations/default/subscription/mqtt-subscription-resource.ts';
+import { type MqttResourceTrait } from '../../traits/mqtt-resource.trait.ts';
+import { type MqttResourceOpenOptions } from '../../traits/static/types/methods/mqtt-resource-open-options.ts';
+import { type MqttResourcePublishOptions } from '../../traits/types/methods/publish/mqtt-resource-publish-options.ts';
+import { type MqttResourcePublishPayload } from '../../traits/types/methods/publish/mqtt-resource-publish.payload.ts';
+import { type MqttResourceSubscribeOptions } from '../../traits/types/methods/subscribe/mqtt-resource-subscribe-options.ts';
+import { setMqttResourceClient } from './mqtt-resource.internals.private.ts';
 
 export class MqttResource extends Resource implements MqttResourceTrait {
   static async open(

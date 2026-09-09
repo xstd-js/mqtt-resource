@@ -1,5 +1,5 @@
 import { type MqttClient } from 'mqtt';
-import { type MqttResource } from './mqtt-resource.js';
+import { type MqttResource } from './mqtt-resource.ts';
 
 const MQTT_RESOURCE_CLIENT_MAP = new WeakMap<MqttResource, MqttClient>();
 

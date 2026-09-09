@@ -1,4 +1,4 @@
-import { type EventHandler } from './event-handler.js';
+import type { EventHandler } from './event-handler.ts';
 
 export interface TypedEventEmitter<TEvents extends Record<keyof TEvents, EventHandler>> {
   on<TEvent extends keyof TEvents>(event: TEvent, callback: TEvents[TEvent]): this;

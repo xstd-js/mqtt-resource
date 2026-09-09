@@ -1,5 +1,5 @@
-import { type MqttResourcePublishOptions } from './mqtt-resource-publish-options.js';
-import { type MqttResourcePublishPayload } from './mqtt-resource-publish.payload.js';
+import { type MqttResourcePublishOptions } from './mqtt-resource-publish-options.ts';
+import { type MqttResourcePublishPayload } from './mqtt-resource-publish.payload.ts';
 
 export interface MqttResourcePublishTrait {
   publish(

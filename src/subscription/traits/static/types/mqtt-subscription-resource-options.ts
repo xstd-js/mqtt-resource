@@ -1,7 +1,6 @@
-import { type HavingMaintainAliveOption } from '../../../../maintain-alive-option/having-maintain-alive-option.js';
-import { type MqttQos } from '../../../../traits/types/mqtt-qos.js';
+import { type MqttQos } from '../../../../traits/types/mqtt-qos.ts';
 
-export interface MqttSubscriptionResourceOptions extends HavingMaintainAliveOption {
+export interface MqttSubscriptionResourceOptions {
   readonly qos?: MqttQos;
   readonly noLocal?: boolean;
   readonly retainAsPublished?: boolean;

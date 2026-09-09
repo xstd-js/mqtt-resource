@@ -1,5 +1,5 @@
-import { type MqttSubscriptionResourceTrait } from '../../../../mqtt-subscription-resource.trait.js';
-import { type MqttSubscriptionResourceFactory } from './mqtt-subscription-resource-factory.js';
+import { type MqttSubscriptionResourceTrait } from '../../../../mqtt-subscription-resource.trait.ts';
+import { type MqttSubscriptionResourceFactory } from './mqtt-subscription-resource-factory.ts';
 
 export interface MqttSubscriptionResourceFactoryTrait<
   GMqttSubscriptionResource extends MqttSubscriptionResourceTrait,

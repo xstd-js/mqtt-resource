@@ -1,5 +1,4 @@
-import { type Resource } from '@xstd/resource';
-import { type MqttSubscriptionResourceListenTrait } from './types/methods/listen/mqtt-subscription-resource.listen.trait.js';
+import { ListenerResource } from '@xstd/listener-resource';
+import type { MqttPublishPacket } from './types/mqtt-publish-packet.ts';
 
-export interface MqttSubscriptionResourceTrait
-  extends Resource, MqttSubscriptionResourceListenTrait {}
+export interface MqttSubscriptionResourceTrait extends ListenerResource<MqttPublishPacket> {}

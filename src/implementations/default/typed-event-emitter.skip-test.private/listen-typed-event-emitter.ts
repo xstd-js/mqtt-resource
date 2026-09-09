@@ -1,5 +1,5 @@
-import { EventHandler } from './event-handler.js';
-import { TypedEventEmitter } from './typed-event-emitter.js';
+import type { EventHandler } from './event-handler.ts';
+import type { TypedEventEmitter } from './typed-event-emitter.ts';
 
 // export type InferTypedEventEvents<GTarget extends TypedEventEmitter<any>> =
 //   GTarget extends TypedEventEmitter<infer TEvents> ? TEvents : never;

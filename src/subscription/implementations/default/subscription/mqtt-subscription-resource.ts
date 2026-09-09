@@ -1,33 +1,42 @@
-import { type Abortable, mergeAbortSignals, sleep } from '@xstd/abortable';
-import { type AcquireCloseHook, AsyncRefCount, type ClosableValue } from '@xstd/async-ref-count';
+import { sleep } from '@xstd/abortable';
+import {
+  type AsyncDisposableRef,
+  AsyncRefCount,
+  SharedAsyncDisposableRef,
+} from '@xstd/async-ref-count';
+import { type EmitValue, ListenerResource } from '@xstd/listener-resource';
 import { MqttTopic } from '@xstd/mqtt-topic';
-import { type OnCloseResource, Resource, ResourceFactory } from '@xstd/resource';
-import { type IPublishPacket, type MqttClient } from 'mqtt';
+import { type OnCloseResource, ResourceFactory } from '@xstd/resource';
+import type { IPublishPacket, MqttClient } from 'mqtt';
 
-import { getMqttResourceClient } from '../../../../implementations/default/mqtt-resource.internals.private.js';
-import { MqttResource } from '../../../../implementations/default/mqtt-resource.js';
-import { resolveMaxMaintainAliveOptions } from '../../../../maintain-alive-option/helpers/resolve-max-maintain-alive-options.js';
-import { type MaintainAliveOption } from '../../../../maintain-alive-option/maintain-alive-option.js';
-import { type MqttSubscriptionResourceTrait } from '../../../traits/mqtt-subscription-resource.trait.js';
-import { type MqttSubscriptionResourceOpenOptions } from '../../../traits/static/types/methods/open/mqtt-subscription-resource-open-options.js';
-import { type MqttSubscriptionResourceOptions } from '../../../traits/static/types/mqtt-subscription-resource-options.js';
-import { type MqttSubscriptionResourceFactory } from '../../../traits/static/types/properties/factory/mqtt-subscription-resource-factory.js';
-import { type MqttSubscriptionResourceListener } from '../../../traits/types/methods/listen/mqtt-subscription-resource-listener.js';
-import { subscribeToMqttClientSubscription } from './functions.private/subscribe-to-mqtt-client-subscription.js';
+import { getMqttResourceClient } from '../../../../implementations/default/mqtt-resource.internals.private.ts';
+import { MqttResource } from '../../../../implementations/default/mqtt-resource.ts';
+import type { MqttSubscriptionResourceTrait } from '../../../traits/mqtt-subscription-resource.trait.ts';
+import type { MqttSubscriptionResourceOpenOptions } from '../../../traits/static/types/methods/open/mqtt-subscription-resource-open-options.ts';
+import type { MqttSubscriptionResourceOptions } from '../../../traits/static/types/mqtt-subscription-resource-options.ts';
+import type { MqttSubscriptionResourceFactory } from '../../../traits/static/types/properties/factory/mqtt-subscription-resource-factory.ts';
+import type { MqttPublishPacket } from '../../../traits/types/mqtt-publish-packet.ts';
+import { subscribeToMqttClientSubscription } from './functions.private/subscribe-to-mqtt-client-subscription.ts';
 
 /* INTERNAL TYPES */
 
-interface ActiveSubscription extends Omit<
-  Required<MqttSubscriptionResourceOptions>,
-  'maintainAlive'
-> {
-  readonly maintainAliveOptions: MaintainAliveOption[];
-  readonly refCount: AsyncRefCount<void>;
+interface ActiveSubscription extends Required<MqttSubscriptionResourceOptions> {
+  readonly refCount: AsyncRefCount<MqttSubscription>;
+}
+
+interface MqttSubscription {
+  readonly client: MqttResource;
+  readonly topic: string;
 }
 
 /* CLASS */
 
-export class MqttSubscriptionResource extends Resource implements MqttSubscriptionResourceTrait {
+export class MqttSubscriptionResource
+  extends ListenerResource<MqttPublishPacket>
+  implements MqttSubscriptionResourceTrait
+{
+  static maintainAlive: number = 1000;
+
   static #activeSubscriptions = new WeakMap<
     MqttResource,
     Map<string /* topic */, ActiveSubscription>
@@ -47,7 +56,6 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
           noLocal = false,
           retainAsPublished = false,
           retainHandling = 0,
-          maintainAlive = 0,
           signal,
         }: MqttSubscriptionResourceOpenOptions = {},
       ): Promise<MqttSubscriptionResource> => {
@@ -64,8 +72,6 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
         let activeSubscription: ActiveSubscription | undefined = activeSubscriptions.get(topic);
 
         if (activeSubscription === undefined) {
-          const maintainAliveOptions: MaintainAliveOption[] = [];
-
           const removeActiveSubscription = (): void => {
             activeSubscriptions.delete(topic);
             if (activeSubscriptions.size === 0) {
@@ -78,9 +84,8 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
             noLocal,
             retainAsPublished,
             retainHandling,
-            maintainAliveOptions,
-            refCount: new AsyncRefCount<void>(
-              async (signal: AbortSignal): Promise<ClosableValue<void>> => {
+            refCount: new AsyncRefCount<MqttSubscription>(
+              async (signal: AbortSignal): Promise<AsyncDisposableRef<MqttSubscription>> => {
                 const nativeClient: MqttClient = getMqttResourceClient(client);
 
                 try {
@@ -96,6 +101,11 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
                   throw error;
                 }
 
+                const value: MqttSubscription = {
+                  client,
+                  topic,
+                };
+
                 const close = async (_reason: unknown): Promise<void> => {
                   try {
                     await nativeClient.unsubscribeAsync(topic);
@@ -104,20 +114,23 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
                   }
                 };
 
-                return {
-                  value: undefined,
-                  close: async (reason: unknown, hook: AcquireCloseHook): Promise<void> => {
-                    const maintainAlive: number =
-                      resolveMaxMaintainAliveOptions(maintainAliveOptions);
+                const maintainAlive: number = MqttSubscriptionResource.maintainAlive;
 
-                    if (maintainAlive > 0) {
-                      const { resolve, signal } = hook();
-                      resolve(sleep(maintainAlive, { signal }).then(close));
-                    } else {
+                if (maintainAlive === 0) {
+                  return {
+                    value,
+                    close,
+                  };
+                } else {
+                  return {
+                    value,
+                    close: async (reason: unknown, signal: AbortSignal): Promise<void> => {
+                      await sleep(maintainAlive, { signal });
                       await close(reason);
-                    }
-                  },
-                };
+                    },
+                    closeShared: (): void => {},
+                  };
+                }
               },
             ),
           };
@@ -132,16 +145,10 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
           throw new Error(`Subscription to "${topic}" already locked.`);
         }
 
-        activeSubscription!.maintainAliveOptions.push(maintainAlive);
-
         return new MqttSubscriptionResource(
-          client,
-          topic,
-          (
-            await activeSubscription.refCount.open({
-              signal,
-            })
-          ).close,
+          await activeSubscription.refCount.open({
+            signal,
+          }),
         );
       },
     );
@@ -161,39 +168,28 @@ export class MqttSubscriptionResource extends Resource implements MqttSubscripti
   readonly #client: MqttClient;
   readonly #topic: MqttTopic;
 
-  private constructor(client: MqttResource, topic: string, close: OnCloseResource) {
-    super(close);
+  private constructor(shared: SharedAsyncDisposableRef<MqttSubscription>) {
+    super((emit: EmitValue<MqttPublishPacket>): OnCloseResource => {
+      const onClientMessage = (topic: string, payload: Buffer, _packet: IPublishPacket): void => {
+        if (this.#topic.matches(topic)) {
+          emit({
+            topic,
+            payload,
+          });
+        }
+      };
 
-    this.#client = getMqttResourceClient(client);
-    this.#topic = new MqttTopic(topic);
+      this.#client.on('message', onClientMessage);
 
-    this.closesWith(client);
-  }
-
-  listen(listener: MqttSubscriptionResourceListener, { signal }: Abortable = {}): void {
-    if (signal?.aborted) {
-      throw signal.reason;
-    }
-
-    this.throwIfClosed();
-
-    const onClientMessage = (topic: string, payload: Buffer, _packet: IPublishPacket): void => {
-      if (this.#topic.matches(topic)) {
-        listener({
-          topic,
-          payload,
-        });
-      }
-    };
-
-    this.#client.on('message', onClientMessage);
-
-    mergeAbortSignals([this.closeSignal, signal]).addEventListener(
-      'abort',
-      (): void => {
+      return (reason: unknown): Promise<void> => {
         this.#client.off('message', onClientMessage);
-      },
-      { once: true },
-    );
+        return shared.close(reason);
+      };
+    });
+
+    this.#client = getMqttResourceClient(shared.value.client);
+    this.#topic = new MqttTopic(shared.value.topic);
+
+    this.closesWith(shared.value.client);
   }
 }
