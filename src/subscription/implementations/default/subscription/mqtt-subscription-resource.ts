@@ -169,26 +169,37 @@ export class MqttSubscriptionResource
   readonly #topic: MqttTopic;
 
   private constructor(shared: SharedAsyncDisposableRef<MqttSubscription>) {
-    super((emit: EmitValue<MqttPublishPacket>): OnCloseResource => {
-      const onClientMessage = (topic: string, payload: Buffer, _packet: IPublishPacket): void => {
-        if (this.#topic.matches(topic)) {
-          emit({
-            topic,
-            payload,
-          });
-        }
-      };
-
-      this.#client.on('message', onClientMessage);
-
+    let emit: EmitValue<MqttPublishPacket>;
+    super((_emit: EmitValue<MqttPublishPacket>): OnCloseResource => {
+      emit = _emit;
       return (reason: unknown): Promise<void> => {
-        this.#client.off('message', onClientMessage);
         return shared.close(reason);
       };
     });
 
     this.#client = getMqttResourceClient(shared.value.client);
     this.#topic = new MqttTopic(shared.value.topic);
+
+    const onClientMessage = (topic: string, payload: Buffer, _packet: IPublishPacket): void => {
+      if (this.#topic.matches(topic)) {
+        emit({
+          topic,
+          payload,
+        });
+      }
+    };
+
+    this.#client.on('message', onClientMessage);
+
+    this.closeSignal.addEventListener(
+      'abort',
+      (): void => {
+        this.#client.off('message', onClientMessage);
+      },
+      {
+        once: true,
+      },
+    );
 
     this.closesWith(shared.value.client);
   }
