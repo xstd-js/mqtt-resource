@@ -1,6 +1,4 @@
-import { type Abortable } from '@xstd/abortable';
-
-export interface MqttResourceOpenOptions extends Abortable {
+export interface MqttResourceOpenOptions {
   readonly clientId?: string;
   readonly username?: string;
   readonly password?: string;

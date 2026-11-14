@@ -1,4 +1,4 @@
-import { type MqttQos } from '../../../../traits/types/mqtt-qos.ts';
+import { type MqttQos } from '../../../../mqtt-resource/types/mqtt-qos.ts';
 
 export interface MqttSubscriptionResourceOptions {
   readonly qos?: MqttQos;

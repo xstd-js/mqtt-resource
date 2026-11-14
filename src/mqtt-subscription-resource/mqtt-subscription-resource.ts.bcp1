@@ -4,19 +4,20 @@ import {
   AsyncRefCount,
   SharedAsyncDisposableRef,
 } from '@xstd/async-ref-count';
-import { type EmitValue, ListenerResource } from '@xstd/listener-resource';
+import { type EmitValue } from '@xstd/listener-resource';
 import { MqttTopic } from '@xstd/mqtt-topic';
+import { ObservableAsyncFunction } from '@xstd/observable-async-function';
 import { type OnCloseResource, ResourceFactory } from '@xstd/resource';
 import type { IPublishPacket, MqttClient } from 'mqtt';
+import type { MqttResourceSubscribeArguments } from '../mqtt-resource/abilities/subscribe/having-mqtt-resource-subscribe-ability.ts';
 
-import { getMqttResourceClient } from '../../../../implementations/default/mqtt-resource.internals.private.ts';
-import { MqttResource } from '../../../../implementations/default/mqtt-resource.ts';
-import type { MqttSubscriptionResourceTrait } from '../../../traits/mqtt-subscription-resource.trait.ts';
-import type { MqttSubscriptionResourceOpenOptions } from '../../../traits/static/types/methods/open/mqtt-subscription-resource-open-options.ts';
-import type { MqttSubscriptionResourceOptions } from '../../../traits/static/types/mqtt-subscription-resource-options.ts';
-import type { MqttSubscriptionResourceFactory } from '../../../traits/static/types/properties/factory/mqtt-subscription-resource-factory.ts';
-import type { MqttPublishPacket } from '../../../traits/types/mqtt-publish-packet.ts';
-import { subscribeToMqttClientSubscription } from './functions.private/subscribe-to-mqtt-client-subscription.ts';
+import { getMqttResourceClient } from '../mqtt-resource/implementations/default/mqtt-resource.internals.private.ts';
+import { MqttResource } from '../mqtt-resource/implementations/default/mqtt-resource.ts';
+import type { MqttPublishPacket } from '../mqtt-resource/types/mqtt-publish-packet.ts';
+import { subscribeToMqttClientSubscription } from '../subscription/implementations/default/subscription/functions.private/subscribe-to-mqtt-client-subscription.ts';
+import type { MqttSubscriptionResourceOpenOptions } from '../subscription/traits/static/types/methods/open/mqtt-subscription-resource-open-options.ts';
+import type { MqttSubscriptionResourceOptions } from '../subscription/traits/static/types/mqtt-subscription-resource-options.ts';
+import type { MqttSubscriptionResourceFactory } from '../subscription/traits/static/types/properties/factory/mqtt-subscription-resource-factory.ts';
 
 /* INTERNAL TYPES */
 
@@ -31,10 +32,10 @@ interface MqttSubscription {
 
 /* CLASS */
 
-export class MqttSubscriptionResource
-  extends ListenerResource<MqttPublishPacket>
-  implements MqttSubscriptionResourceTrait
-{
+export class MqttSubscriptionResource extends ObservableAsyncFunction<
+  MqttPublishPacket,
+  MqttResourceSubscribeArguments
+> {
   static maintainAlive: number = 1000;
 
   static #activeSubscriptions = new WeakMap<

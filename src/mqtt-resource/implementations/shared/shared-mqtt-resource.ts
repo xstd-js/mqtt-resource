@@ -7,12 +7,12 @@ import {
 import { Resource, ResourceFactory } from '@xstd/resource';
 import { sha256 } from '@xstd/sha256';
 
-import { type MqttSubscriptionResource } from '../../subscription/implementations/default/subscription/mqtt-subscription-resource.ts';
-import { type MqttResourceTrait } from '../../traits/mqtt-resource.trait.ts';
-import { type MqttResourceOpenOptions } from '../../traits/static/types/methods/mqtt-resource-open-options.ts';
-import { type MqttResourcePublishOptions } from '../../traits/types/methods/publish/mqtt-resource-publish-options.ts';
-import { type MqttResourcePublishPayload } from '../../traits/types/methods/publish/mqtt-resource-publish.payload.ts';
-import { type MqttResourceSubscribeOptions } from '../../traits/types/methods/subscribe/mqtt-resource-subscribe-options.ts';
+import { type MqttSubscriptionResource } from '../../../mqtt-subscription-resource/mqtt-subscription-resource.ts';
+import { type MqttResourceOpenOptions } from '../../abilities/open/mqtt-resource-open-options.ts';
+import { type MqttResourcePublishOptions } from '../../abilities/publish/mqtt-resource-publish-options.ts';
+import { type MqttResourcePublishPayload } from '../../abilities/publish/mqtt-resource-publish-payload.ts';
+import { type MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqtt-resource-subscribe-options.ts';
+import { type HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { MqttResource } from '../default/mqtt-resource.ts';
 
 /* TYPES */
@@ -33,7 +33,7 @@ interface ActiveConnection {
 
 /* CLASS */
 
-export class SharedMqttResource extends Resource implements MqttResourceTrait {
+export class SharedMqttResource extends Resource implements HavingMqttResourceAbilities {
   static maintainAlive: number = 1000;
 
   static #activeConnections = new Map<string /* key */, ActiveConnection>();
