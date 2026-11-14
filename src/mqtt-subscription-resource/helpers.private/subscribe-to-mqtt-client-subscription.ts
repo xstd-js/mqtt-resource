@@ -1,6 +1,6 @@
-import { type Abortable } from '@xstd/abortable';
-import { type ISubscriptionGrant, type MqttClient } from 'mqtt';
-import { type MqttQos } from '../../../../../mqtt-resource/types/mqtt-qos.ts';
+import type { Abortable } from '@xstd/abortable';
+import type { ISubscriptionGrant, MqttClient } from 'mqtt';
+import type { MqttQos } from '../../mqtt-resource/types/mqtt-qos.ts';
 
 export interface SubscribeToMqttClientSubscriptionOptions extends Abortable {
   readonly qos?: MqttQos;

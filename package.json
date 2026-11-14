@@ -48,7 +48,7 @@
     "@xstd/async-function": "^1.3.1",
     "@xstd/async-ref-count": "^0.2.0",
     "@xstd/custom-error": "^0.2.0",
-    "@xstd/listener-resource": "^1.0.0",
+    "@xstd/listener-resource": "^1.0.1",
     "@xstd/mqtt-topic": "^1.0.0",
     "@xstd/observable-async-function": "^1.0.0",
     "@xstd/resource": "^1.0.0",

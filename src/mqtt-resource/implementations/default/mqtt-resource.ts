@@ -3,11 +3,15 @@ import { CompleteError } from '@xstd/custom-error';
 import { CloseStack, Resource } from '@xstd/resource';
 import mqtt, { type IDisconnectPacket, type MqttClient } from 'mqtt';
 
+import { AsyncFunction } from '@xstd/async-function';
+import { newMqttSubscriptionResource } from '../../../mqtt-subscription-resource/helpers.private/mqtt-subscription-resource-context.ts';
 import { MqttSubscriptionResource } from '../../../mqtt-subscription-resource/mqtt-subscription-resource.ts';
 import { type MqttResourceOpenOptions } from '../../abilities/open/mqtt-resource-open-options.ts';
+import type { MqttResourcePublishAction } from '../../abilities/publish/mqtt-resource-publish-action.ts';
 import { type MqttResourcePublishOptions } from '../../abilities/publish/mqtt-resource-publish-options.ts';
 import { type MqttResourcePublishPayload } from '../../abilities/publish/mqtt-resource-publish-payload.ts';
 import { type MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqtt-resource-subscribe-options.ts';
+import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
 import { type HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { setMqttResourceClient } from './mqtt-resource.internals.private.ts';
 
@@ -39,6 +43,9 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
 
   readonly #client: MqttClient;
   readonly #closeStack: CloseStack;
+
+  readonly #publish: MqttResourcePublishAction;
+  readonly #subscribe: MqttResourceSubscribeStream;
 
   private constructor(client: MqttClient) {
     super((reason: unknown): Promise<void> => {
@@ -90,21 +97,35 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
     this.#closeStack.addTeardown((): Promise<void> => {
       return this.#client.endAsync();
     });
+
+    this.#publish = new AsyncFunction(
+      (
+        signal: AbortSignal,
+        topic: string,
+        payload: MqttResourcePublishPayload,
+        options?: MqttResourcePublishOptions,
+      ) => {
+        return this.#closeStack.runTask(
+          async (signal: AbortSignal): Promise<void> => {
+            await abortify(this.#client.publishAsync(topic, payload as any, options), {
+              signal,
+            });
+          },
+          { signal },
+        );
+      },
+    );
+
+    this.#subscribe = newMqttSubscriptionResource({
+      client: this,
+      nativeClient: this.#client,
+    });
+
+    // TODO continue here
   }
 
-  publish(
-    topic: string,
-    payload: MqttResourcePublishPayload,
-    { signal, ...options }: MqttResourcePublishOptions = {},
-  ): Promise<void> {
-    return this.#closeStack.runTask(
-      async (signal: AbortSignal): Promise<void> => {
-        await abortify(this.#client.publishAsync(topic, payload as any, options), {
-          signal,
-        });
-      },
-      { signal },
-    );
+  get publish(): MqttResourcePublishAction {
+    return this.#publish;
   }
 
   subscribe(
