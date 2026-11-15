@@ -5,12 +5,10 @@ import mqtt, { type IDisconnectPacket, type MqttClient } from 'mqtt';
 
 import { AsyncFunction } from '@xstd/async-function';
 import { newMqttSubscriptionResource } from '../../../mqtt-subscription-resource/helpers.private/mqtt-subscription-resource-context.ts';
-import { MqttSubscriptionResource } from '../../../mqtt-subscription-resource/mqtt-subscription-resource.ts';
 import { type MqttResourceOpenOptions } from '../../abilities/open/mqtt-resource-open-options.ts';
 import type { MqttResourcePublishAction } from '../../abilities/publish/mqtt-resource-publish-action.ts';
 import { type MqttResourcePublishOptions } from '../../abilities/publish/mqtt-resource-publish-options.ts';
 import { type MqttResourcePublishPayload } from '../../abilities/publish/mqtt-resource-publish-payload.ts';
-import { type MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqtt-resource-subscribe-options.ts';
 import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
 import { type HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { setMqttResourceClient } from './mqtt-resource.internals.private.ts';
@@ -120,28 +118,30 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
       client: this,
       nativeClient: this.#client,
     });
-
-    // TODO continue here
   }
 
   get publish(): MqttResourcePublishAction {
     return this.#publish;
   }
 
-  subscribe(
-    topic: string,
-    { signal, ...options }: MqttResourceSubscribeOptions = {},
-  ): Promise<MqttSubscriptionResource> {
-    return this.#closeStack.runTask(
-      async (signal: AbortSignal): Promise<MqttSubscriptionResource> => {
-        return this.#closeStack.adoptResource(
-          await MqttSubscriptionResource.open(this, topic, {
-            ...options,
-            signal,
-          }),
-        );
-      },
-      { signal },
-    );
+  get subscribe(): MqttResourceSubscribeStream {
+    return this.#subscribe;
   }
+
+  // subscribe(
+  //   topic: string,
+  //   { signal, ...options }: MqttResourceSubscribeOptions = {},
+  // ): Promise<MqttSubscriptionResource> {
+  //   return this.#closeStack.runTask(
+  //     async (signal: AbortSignal): Promise<MqttSubscriptionResource> => {
+  //       return this.#closeStack.adoptResource(
+  //         await MqttSubscriptionResource.open(this, topic, {
+  //           ...options,
+  //           signal,
+  //         }),
+  //       );
+  //     },
+  //     { signal },
+  //   );
+  // }
 }
