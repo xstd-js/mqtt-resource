@@ -94,6 +94,19 @@ describe('MqttResource', () => {
     }
   });
 
+  it('closes when the client emits close (clean connection loss)', async () => {
+    const client: MqttClient = createClientMock();
+    connectAsyncMock.mockResolvedValue(client);
+
+    const resource: MqttResource = await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
+
+    // a clean TCP disconnection emits only 'close': no 'error', 'disconnect' nor 'end'
+    client.emit('close');
+
+    await resource.closed;
+    expect(client.endAsync).toHaveBeenCalledExactlyOnceWith();
+  });
+
   it('does not produce unhandled rejections when an event-triggered close fails', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((): void => {});
     const client: MqttClient = createClientMock();

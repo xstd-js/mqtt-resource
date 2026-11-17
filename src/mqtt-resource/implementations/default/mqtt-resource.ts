@@ -84,9 +84,15 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
       void this.close(new Error('Client ended')).catch(reportCloseError);
     };
 
+    // A clean TCP disconnection emits only 'close': no 'error', 'disconnect' nor 'end'.
+    const onClientClose = (): void => {
+      void this.close(new Error('Connection lost')).catch(reportCloseError);
+    };
+
     this.#client.on('disconnect', onClientDisconnect);
     this.#client.on('error', onClientError);
     this.#client.on('end', onClientEnd);
+    this.#client.on('close', onClientClose);
 
     this.closeSignal.addEventListener(
       'abort',
@@ -94,6 +100,7 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
         this.#client.off('disconnect', onClientDisconnect);
         this.#client.off('error', onClientError);
         this.#client.off('end', onClientEnd);
+        this.#client.off('close', onClientClose);
       },
       {
         once: true,
