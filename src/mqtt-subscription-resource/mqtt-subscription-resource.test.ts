@@ -13,6 +13,8 @@ import { MqttSubscriptionResource } from './mqtt-subscription-resource.ts';
 function createClientMock(): MqttClient {
   const client: MqttClient = new EventEmitter() as unknown as MqttClient;
   Object.assign(client, {
+    connected: true,
+    disconnecting: false,
     subscribeAsync: vi.fn(async (): Promise<ISubscriptionGrant[]> => []),
     unsubscribeAsync: vi.fn(async (): Promise<undefined> => undefined),
   });
@@ -91,6 +93,50 @@ describe('MqttSubscriptionResource', () => {
       await expect(listener.close()).rejects.toThrow('unsubscribe failed');
     } finally {
       MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
+  it('does not unsubscribe when the client is no longer connected on delayed close', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((): void => {});
+    const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
+    MqttSubscriptionResource.maintainAlive = 5; // delayed close, shortened for the test
+    try {
+      const client: MqttClient = createClientMock();
+      // mirrors mqtt.js: unsubscribing from a disconnected client rejects
+      client.unsubscribeAsync = vi.fn(async (): Promise<undefined> => {
+        if (!client.connected) {
+          throw new Error('client disconnecting');
+        }
+        return undefined;
+      });
+      const { closeStack } = createCloseStack();
+      const subscriptionResource = newMqttSubscriptionResource({
+        nativeClient: client,
+        closeStack,
+      });
+
+      client.subscribeAsync = vi.fn(async (): Promise<ISubscriptionGrant[]> => [
+        { topic: 'test/topic', qos: 0 },
+      ]);
+
+      const listener: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+        NEVER_ABORTED,
+        'test/topic',
+      );
+
+      await listener.close();
+
+      // simulate the connection dying while the maintain-alive delay elapses
+      client.connected = false;
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 50);
+      });
+
+      expect(client.unsubscribeAsync).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    } finally {
+      MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
+      consoleErrorSpy.mockRestore();
     }
   });
 });

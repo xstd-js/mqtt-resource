@@ -75,7 +75,11 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
 
                     const close = async (_reason: unknown): Promise<void> => {
                       try {
-                        await nativeClient.unsubscribeAsync(topic);
+                        // When the connection is gone or closing, the broker already dropped the
+                        // subscription with its session: unsubscribing would only fail.
+                        if (nativeClient.connected && !nativeClient.disconnecting) {
+                          await nativeClient.unsubscribeAsync(topic);
+                        }
                       } finally {
                         removeActiveSubscription();
                       }
