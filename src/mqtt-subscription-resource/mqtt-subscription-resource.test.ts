@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CloseStack } from '@xstd/resource';
 import type { MqttPublishPacket } from '../mqtt-resource/types/mqtt-publish-packet.ts';
 import { newMqttSubscriptionResource } from './helpers.private/mqtt-subscription-resource-context.ts';
+import { MqttSubscriptionResource } from './mqtt-subscription-resource.ts';
 
 function createClientMock(): MqttClient {
   const client: MqttClient = new EventEmitter() as unknown as MqttClient;
@@ -62,5 +63,34 @@ describe('MqttSubscriptionResource', () => {
     });
 
     expect(received).toEqual([{ topic: 'test/topic', payload: Buffer.from('retained') }]);
+  });
+
+  it('rejects when the underlying unsubscribe fails on close', async () => {
+    const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
+    MqttSubscriptionResource.maintainAlive = 0; // close() awaits the full unsubscribe
+    try {
+      const client: MqttClient = createClientMock();
+      const { closeStack } = createCloseStack();
+      const subscriptionResource = newMqttSubscriptionResource({
+        nativeClient: client,
+        closeStack,
+      });
+
+      client.subscribeAsync = vi.fn(async (): Promise<ISubscriptionGrant[]> => [
+        { topic: 'test/topic', qos: 0 },
+      ]);
+      client.unsubscribeAsync = vi.fn(async (): Promise<undefined> => {
+        throw new Error('unsubscribe failed');
+      });
+
+      const listener: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+        NEVER_ABORTED,
+        'test/topic',
+      );
+
+      await expect(listener.close()).rejects.toThrow('unsubscribe failed');
+    } finally {
+      MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
+    }
   });
 });

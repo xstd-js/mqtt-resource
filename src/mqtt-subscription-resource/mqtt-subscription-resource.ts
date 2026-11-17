@@ -176,8 +176,8 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
                       },
                     );
 
-                    return (reason: unknown): void => {
-                      sharedSubscription.close(reason);
+                    return (reason: unknown): Promise<void> => {
+                      return sharedSubscription.close(reason);
                     };
                   },
                 ),
