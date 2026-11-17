@@ -57,7 +57,7 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
 
               const maintainAlive: number = this.maintainAlive;
 
-              if (maintainAlive === 0) {
+              if (maintainAlive <= 0) {
                 return {
                   value: client,
                   close,

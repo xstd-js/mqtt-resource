@@ -1,9 +1,10 @@
 import { NEVER_ABORTED } from '@xstd/abortable';
 import { CompleteError } from '@xstd/custom-error';
-import { type MqttClient } from 'mqtt';
+import { type ISubscriptionGrant, type MqttClient } from 'mqtt';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
+import { MqttSubscriptionResource } from '../../../mqtt-subscription-resource/mqtt-subscription-resource.ts';
 import { MqttResource } from './mqtt-resource.ts';
 
 const connectAsyncMock = vi.hoisted(() => vi.fn());
@@ -16,9 +17,14 @@ function createClientMock(): MqttClient {
   const client: MqttClient = new EventEmitter() as unknown as MqttClient;
   Object.assign(client, {
     connected: true,
-    setMaxListeners: vi.fn(),
+    // NOTE: `setMaxListeners` is intentionally NOT stubbed: the real EventEmitter
+    // implementation must be used so that the production cap actually applies.
     endAsync: vi.fn(async (): Promise<void> => undefined),
     publishAsync: vi.fn(async (): Promise<void> => undefined),
+    subscribeAsync: vi.fn(async (topic: string): Promise<ISubscriptionGrant[]> => [
+      { topic, qos: 0 },
+    ]),
+    unsubscribeAsync: vi.fn(async (): Promise<undefined> => undefined),
   });
   return client;
 }
@@ -40,5 +46,51 @@ describe('MqttResource', () => {
 
     await resource.closed;
     expect(client.endAsync).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it('does not emit MaxListenersExceededWarning with many subscriptions', async () => {
+    const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
+    MqttSubscriptionResource.maintainAlive = 0;
+    const warnings: Error[] = [];
+    const onWarning = (warning: Error): void => {
+      warnings.push(warning);
+    };
+    process.on('warning', onWarning);
+    try {
+      const client: MqttClient = createClientMock();
+      connectAsyncMock.mockResolvedValue(client);
+
+      const resource: MqttResource = await MqttResource.open.call(
+        NEVER_ABORTED,
+        'mqtt://localhost',
+      );
+
+      const listeners = await Promise.all(
+        Array.from({ length: 25 }, (_: unknown, index: number): Promise<unknown> => {
+          return resource.subscribe.call(NEVER_ABORTED, `test/topic-${index}`);
+        }),
+      );
+
+      // process warnings are emitted asynchronously
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 20);
+      });
+
+      expect(
+        warnings.filter((warning: Error): boolean => {
+          return warning.name === 'MaxListenersExceededWarning';
+        }),
+      ).toEqual([]);
+
+      await Promise.all(
+        listeners.map((listener: unknown): Promise<void> => {
+          return (listener as { close(): Promise<void> }).close();
+        }),
+      );
+      await resource.close(new CompleteError());
+    } finally {
+      process.off('warning', onWarning);
+      MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
+    }
   });
 });

@@ -32,8 +32,9 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
         autoAssignTopicAlias: true,
       });
 
-      client.setMaxListeners(20);
-      // client.setMaxListeners(50);
+      // One 'message' listener is registered per active subscription; their lifecycle is
+      // managed by the subscription resources, so no arbitrary cap must apply.
+      client.setMaxListeners(0);
 
       if (signal?.aborted) {
         await client.endAsync();
