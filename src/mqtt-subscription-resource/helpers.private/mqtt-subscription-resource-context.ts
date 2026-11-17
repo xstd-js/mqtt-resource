@@ -1,10 +1,10 @@
+import type { CloseStack } from '@xstd/resource';
 import type { MqttClient } from 'mqtt';
-import type { MqttResource } from '../../mqtt-resource/implementations/default/mqtt-resource.ts';
 import { MqttSubscriptionResource } from '../mqtt-subscription-resource.ts';
 
 export interface MqttSubscriptionResourceContext {
-  readonly client: MqttResource;
   readonly nativeClient: MqttClient;
+  readonly closeStack: CloseStack;
 }
 
 let MQTT_SUBSCRIPTION_RESOURCE_CONTEXT: MqttSubscriptionResourceContext | undefined = undefined;

@@ -1,54 +1,40 @@
 import { sleep } from '@xstd/abortable';
+import { AsyncFunction } from '@xstd/async-function';
 import {
   type AsyncDisposableRef,
   AsyncRefCount,
   type SharedAsyncDisposableRef,
 } from '@xstd/async-ref-count';
-import { Resource, ResourceFactory } from '@xstd/resource';
+import { Resource } from '@xstd/resource';
 import { sha256 } from '@xstd/sha256';
+import type { MqttResourceOpenAction } from '../../abilities/open/mqtt-resource-open-action.ts';
+import type { MqttResourceOpenArguments } from '../../abilities/open/mqtt-resource-open-arguments.ts';
 
-import { type MqttSubscriptionResource } from '../../../mqtt-subscription-resource/mqtt-subscription-resource.ts';
-import { type MqttResourceOpenOptions } from '../../abilities/open/mqtt-resource-open-options.ts';
-import { type MqttResourcePublishOptions } from '../../abilities/publish/mqtt-resource-publish-options.ts';
-import { type MqttResourcePublishPayload } from '../../abilities/publish/mqtt-resource-publish-payload.ts';
-import { type MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqtt-resource-subscribe-options.ts';
-import { type HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
+import type { MqttResourceOpenOptions } from '../../abilities/open/mqtt-resource-open-options.ts';
+import type { MqttResourcePublishAction } from '../../abilities/publish/mqtt-resource-publish-action.ts';
+import type { MqttResourcePublishArguments } from '../../abilities/publish/mqtt-resource-publish-arguments.ts';
+import type { MqttResourcePublishOptions } from '../../abilities/publish/mqtt-resource-publish-options.ts';
+import type { MqttResourcePublishPayload } from '../../abilities/publish/mqtt-resource-publish-payload.ts';
+import type { MqttResourceSubscribeArguments } from '../../abilities/subscribe/mqtt-resource-subscribe-arguments.ts';
+import type { MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqtt-resource-subscribe-options.ts';
+import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
+import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { MqttResource } from '../default/mqtt-resource.ts';
-
-/* TYPES */
-
-export type SharedMqttResourceFactory = ResourceFactory<
-  [url: string | URL],
-  SharedMqttResource,
-  SharedMqttResourceOpenOptions
->;
-
-export interface SharedMqttResourceOpenOptions extends MqttResourceOpenOptions {}
-
-/* INTERNAL TYPES */
-
-interface ActiveConnection {
-  readonly refCount: AsyncRefCount<MqttResource>;
-}
-
-/* CLASS */
 
 export class SharedMqttResource extends Resource implements HavingMqttResourceAbilities {
   static maintainAlive: number = 1000;
 
   static #activeConnections = new Map<string /* key */, ActiveConnection>();
 
-  static readonly #factory: SharedMqttResourceFactory = new ResourceFactory<
-    [url: string | URL],
-    SharedMqttResource,
-    SharedMqttResourceOpenOptions
+  static #open: MqttResourceOpenAction<SharedMqttResource> = new AsyncFunction<
+    MqttResourceOpenArguments,
+    SharedMqttResource
   >(
     async (
+      signal: AbortSignal,
       url: string | URL,
-      { clientId, username, password, signal }: SharedMqttResourceOpenOptions = {},
+      { clientId, username, password }: MqttResourceOpenOptions = {},
     ): Promise<SharedMqttResource> => {
-      signal?.throwIfAborted();
-
       const key: string = sha256(
         new TextEncoder().encode(JSON.stringify([url.toString(), clientId, username, password])),
       ).toHex();
@@ -59,18 +45,17 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
         activeConnection = {
           refCount: new AsyncRefCount<MqttResource>(
             async (signal: AbortSignal): Promise<AsyncDisposableRef<MqttResource>> => {
-              const client: MqttResource = await MqttResource.open(url, {
+              const client: MqttResource = await MqttResource.open.call(signal, url, {
                 clientId,
                 username,
                 password,
-                signal,
               });
 
               const close = async (reason?: unknown): Promise<void> => {
                 return client.close(reason);
               };
 
-              const maintainAlive: number = SharedMqttResource.maintainAlive;
+              const maintainAlive: number = this.maintainAlive;
 
               if (maintainAlive === 0) {
                 return {
@@ -102,18 +87,14 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
     },
   );
 
-  static get factory(): SharedMqttResourceFactory {
-    return this.#factory;
-  }
-
-  static async open(
-    url: string | URL,
-    options?: SharedMqttResourceOpenOptions,
-  ): Promise<SharedMqttResource> {
-    return this.#factory.open(url, options);
+  static get open(): MqttResourceOpenAction<SharedMqttResource> {
+    return this.#open;
   }
 
   readonly #shared: SharedAsyncDisposableRef<MqttResource>;
+
+  readonly #publish: MqttResourcePublishAction;
+  readonly #subscribe: MqttResourceSubscribeStream;
 
   private constructor(shared: SharedAsyncDisposableRef<MqttResource>) {
     super((reason: unknown): Promise<void> => shared.close(reason));
@@ -121,22 +102,37 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
     // TODO should probably use a close stack here?
     this.#shared = shared;
     this.closesWith(shared.value);
+
+    this.#publish = this.#shared.value.publish.mapArguments(
+      (
+        topic: string,
+        payload: MqttResourcePublishPayload,
+        options?: MqttResourcePublishOptions,
+      ): MqttResourcePublishArguments => {
+        this.throwIfClosed();
+        return [topic, payload, options];
+      },
+    );
+
+    this.#subscribe = this.#shared.value.subscribe.mapArguments(
+      (topic: string, options?: MqttResourceSubscribeOptions): MqttResourceSubscribeArguments => {
+        this.throwIfClosed();
+        return [topic, options];
+      },
+    );
   }
 
-  publish(
-    topic: string,
-    payload: MqttResourcePublishPayload,
-    options?: MqttResourcePublishOptions,
-  ): Promise<void> {
-    this.throwIfClosed();
-    return this.#shared.value.publish(topic, payload, options);
+  get publish(): MqttResourcePublishAction {
+    return this.#publish;
   }
 
-  subscribe(
-    topic: string,
-    options?: MqttResourceSubscribeOptions,
-  ): Promise<MqttSubscriptionResource> {
-    this.throwIfClosed();
-    return this.#shared.value.subscribe(topic, options);
+  get subscribe(): MqttResourceSubscribeStream {
+    return this.#subscribe;
   }
+}
+
+/* INTERNAL */
+
+interface ActiveConnection {
+  readonly refCount: AsyncRefCount<MqttResource>;
 }

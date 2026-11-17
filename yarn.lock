@@ -1052,14 +1052,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@xstd/async-ref-count@npm:^0.2.0":
-  version: 0.2.0
-  resolution: "@xstd/async-ref-count@npm:0.2.0"
+"@xstd/async-ref-count@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "@xstd/async-ref-count@npm:1.0.0"
   dependencies:
     "@xstd/abortable": "npm:^1.2.3"
     "@xstd/block": "npm:^1.0.0"
-    "@xstd/enum": "npm:^1.1.0"
-  checksum: 10c0/76713c929b7c06b0235317735a998781c825ef0a1920375b2a4c1e3e8d2180ff2ec1bf87f0d9567d4c4e00b0020d1d801fcdddbd72ce5b0a21a7305f4e61aa9e
+  checksum: 10c0/7854365f3624711b122af86acd5e2a64f1877e65e1dee95d44e7ca65e8dfdfd0bce61e8dbd0b09d576bcb615143a54a529c579d7d17bc795442fbd80aca0f41d
   languageName: node
   linkType: hard
 
@@ -1074,13 +1073,6 @@ __metadata:
   version: 0.2.0
   resolution: "@xstd/custom-error@npm:0.2.0"
   checksum: 10c0/ecb67ad29da317746c8a3333ea9dd1536323feb230897703aaa386daa9c4540eb30ac028ef92d58918cb67d12772f8c741cbaa7d6f645b8cbd864f57c36324d0
-  languageName: node
-  linkType: hard
-
-"@xstd/enum@npm:^1.1.0":
-  version: 1.1.0
-  resolution: "@xstd/enum@npm:1.1.0"
-  checksum: 10c0/3a9f129f5e66ca42a26bcff5d768aa5d3c8bc3834f710945b8b4e07d1167323bdc114ea5ee0e1f72380c9fce16b4c779ac1fe2e41edc8a56a873e606095e8e1a
   languageName: node
   linkType: hard
 
@@ -1119,7 +1111,7 @@ __metadata:
     "@vitest/coverage-istanbul": "npm:^5.1.0"
     "@xstd/abortable": "npm:^1.2.3"
     "@xstd/async-function": "npm:^1.3.1"
-    "@xstd/async-ref-count": "npm:^0.2.0"
+    "@xstd/async-ref-count": "npm:^1.0.0"
     "@xstd/custom-error": "npm:^0.2.0"
     "@xstd/listener-resource": "npm:^1.0.1"
     "@xstd/mqtt-topic": "npm:^1.0.0"

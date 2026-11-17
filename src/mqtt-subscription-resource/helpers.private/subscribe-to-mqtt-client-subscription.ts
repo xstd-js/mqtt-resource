@@ -32,6 +32,14 @@ export async function subscribeToMqttClientSubscription(
     throw signal.reason;
   }
 
+  if (qos !== undefined && granted.qos > 2) {
+    // The broker rejected the subscription (granted qos 0x80 or any MQTT5 error code):
+    // nothing was subscribed, so there is nothing to roll back.
+    throw new Error(
+      `Cannot subscribe to "${topic}": the broker rejected the subscription (granted ${granted.qos}).`,
+    );
+  }
+
   if (qos !== undefined && granted.qos < qos) {
     await client.unsubscribeAsync(topic);
     throw new Error(`Cannot subscribe to "${topic}" with a qos of ${qos}. Granted ${granted.qos}.`);

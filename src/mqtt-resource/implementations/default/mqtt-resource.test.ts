@@ -1,7 +1,8 @@
+import { NEVER_ABORTED } from '@xstd/abortable';
 import { CompleteError } from '@xstd/custom-error';
+import { type MqttClient } from 'mqtt';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { type MqttClient } from 'mqtt';
 
 import { MqttResource } from './mqtt-resource.ts';
 
@@ -27,13 +28,13 @@ describe('MqttResource', () => {
     const client: MqttClient = createClientMock();
     connectAsyncMock.mockResolvedValue(client);
 
-    const resource: MqttResource = await MqttResource.open('mqtt://localhost');
+    const resource: MqttResource = await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
 
     resource.throwIfClosed();
 
-    await resource.publish('test/topic', 'hello');
+    await resource.publish.call(NEVER_ABORTED, 'test/topic', 'hello');
 
-    expect(client.publishAsync).toHaveBeenCalledExactlyOnceWith('test/topic', 'hello', {});
+    expect(client.publishAsync).toHaveBeenCalledExactlyOnceWith('test/topic', 'hello', undefined);
 
     await resource.close(new CompleteError());
 
