@@ -66,20 +66,22 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
       throw new Error('MqttClient not open.');
     }
 
+    // Event-triggered closes may fail (e.g. 'endAsync' rejecting on an already dead
+    // connection); their error is reported since no caller observes the close promise.
     const onClientDisconnect = (packet: IDisconnectPacket): void => {
-      if (packet.reasonCode === undefined || packet.reasonCode === 0x00) {
-        void this.close(new CompleteError());
-      } else {
-        void this.close(new Error('Disconnected', { cause: packet }));
-      }
+      const reason: unknown =
+        packet.reasonCode === undefined || packet.reasonCode === 0x00
+          ? new CompleteError()
+          : new Error('Disconnected', { cause: packet });
+      void this.close(reason).catch(reportCloseError);
     };
 
     const onClientError = (error: unknown): void => {
-      void this.close(error);
+      void this.close(error).catch(reportCloseError);
     };
 
     const onClientEnd = (): void => {
-      void this.close(new Error('Client ended'));
+      void this.close(new Error('Client ended')).catch(reportCloseError);
     };
 
     this.#client.on('disconnect', onClientDisconnect);
@@ -135,4 +137,14 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
   get subscribe(): MqttResourceSubscribeStream {
     return this.#subscribe;
   }
+}
+
+/* INTERNAL */
+
+/**
+ * Reports the error of a close operation triggered by a client event, which no
+ * caller observes.
+ */
+function reportCloseError(error: unknown): void {
+  (globalThis.reportError ?? console.error)(error);
 }

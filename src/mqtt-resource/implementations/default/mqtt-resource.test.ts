@@ -93,4 +93,34 @@ describe('MqttResource', () => {
       MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
     }
   });
+
+  it('does not produce unhandled rejections when an event-triggered close fails', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((): void => {});
+    const client: MqttClient = createClientMock();
+    client.endAsync = vi.fn(async (): Promise<void> => {
+      throw new Error('end failed');
+    });
+    connectAsyncMock.mockResolvedValue(client);
+
+    await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
+
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown): void => {
+      unhandledRejections.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+    try {
+      // triggers the close through the client 'error' event handler
+      client.emit('error', new Error('client error'));
+
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 20);
+      });
+
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });
