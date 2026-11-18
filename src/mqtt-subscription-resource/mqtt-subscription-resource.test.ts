@@ -238,6 +238,129 @@ describe('MqttSubscriptionResource', () => {
     }
   });
 
+  it('shares the underlying subscription between listeners on the same topic', async () => {
+    const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
+    MqttSubscriptionResource.maintainAlive = 0; // deterministic synchronous close
+    try {
+      const client: MqttClient = createClientMock();
+      client.subscribeAsync = vi.fn(async (topic: string): Promise<ISubscriptionGrant[]> => [
+        { topic, qos: 0 },
+      ]);
+      const { closeStack } = createCloseStack();
+      const subscriptionResource = newMqttSubscriptionResource({
+        nativeClient: client,
+        closeStack,
+      });
+
+      const first: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+        NEVER_ABORTED,
+        'test/topic',
+      );
+      const second: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+        NEVER_ABORTED,
+        'test/topic',
+      );
+
+      // one native subscription backs both listeners
+      expect(client.subscribeAsync).toHaveBeenCalledOnce();
+
+      const firstReceived: MqttPublishPacket[] = [];
+      const secondReceived: MqttPublishPacket[] = [];
+      first.listen((packet: MqttPublishPacket): void => {
+        firstReceived.push(packet);
+      });
+      second.listen((packet: MqttPublishPacket): void => {
+        secondReceived.push(packet);
+      });
+
+      client.emit('message', 'test/topic', Buffer.from('hello'), {
+        cmd: 'publish',
+        dup: false,
+        qos: 0,
+        retain: false,
+        topic: 'test/topic',
+        payload: Buffer.from('hello'),
+      });
+
+      // let the macrotasks run (message dispatch, buffered values flush...)
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 10);
+      });
+
+      expect(firstReceived).toEqual([
+        { topic: 'test/topic', payload: Buffer.from('hello'), qos: 0, retain: false },
+      ]);
+      expect(secondReceived).toEqual(firstReceived);
+
+      await first.close();
+      // the native subscription stays alive while `second` is open
+      expect(client.unsubscribeAsync).not.toHaveBeenCalled();
+
+      await second.close();
+      expect(client.unsubscribeAsync).toHaveBeenCalledExactlyOnceWith('test/topic');
+    } finally {
+      MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
+  it('rejects a second listener with different options on the same topic', async () => {
+    const client: MqttClient = createClientMock();
+    client.subscribeAsync = vi.fn(async (topic: string): Promise<ISubscriptionGrant[]> => [
+      { topic, qos: 0 },
+    ]);
+    const { closeStack } = createCloseStack();
+    const subscriptionResource = newMqttSubscriptionResource({
+      nativeClient: client,
+      closeStack,
+    });
+
+    const first: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+      NEVER_ABORTED,
+      'test/topic',
+    );
+
+    await expect(
+      subscriptionResource.call(NEVER_ABORTED, 'test/topic', { qos: 1 }),
+    ).rejects.toThrow('already locked');
+
+    await first.close();
+  });
+
+  it('cleans up when the signal aborts during the subscription establishment', async () => {
+    const client: MqttClient = createClientMock();
+    let resolveSubscribeAsync!: () => void;
+    client.subscribeAsync = vi.fn(
+      (): Promise<ISubscriptionGrant[]> =>
+        new Promise<ISubscriptionGrant[]>(
+          (resolve: (grants: ISubscriptionGrant[]) => void): void => {
+            resolveSubscribeAsync = (): void => {
+              resolve([{ topic: 'test/topic', qos: 0 }]);
+            };
+          },
+        ),
+    );
+    const { closeStack } = createCloseStack();
+    const subscriptionResource = newMqttSubscriptionResource({
+      nativeClient: client,
+      closeStack,
+    });
+
+    const abortController: AbortController = new AbortController();
+    const promise: Promise<ListenerResource<MqttPublishPacket>> = subscriptionResource.call(
+      abortController.signal,
+      'test/topic',
+    );
+
+    abortController.abort();
+    resolveSubscribeAsync();
+
+    await expect(promise).rejects.toBe(abortController.signal.reason);
+
+    // the 'message' listener is detached and the rollback unsubscribe ran
+    expect(client.listenerCount('message')).toBe(0);
+    expect(client.unsubscribeAsync).toHaveBeenCalledExactlyOnceWith('test/topic');
+  });
+
   it('rejects when the underlying unsubscribe fails on close', async () => {
     const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
     MqttSubscriptionResource.maintainAlive = 0; // close() awaits the full unsubscribe

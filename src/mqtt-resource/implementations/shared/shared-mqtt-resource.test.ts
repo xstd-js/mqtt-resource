@@ -22,9 +22,12 @@ function createClientMock(): MqttClient {
   return client;
 }
 
+let lastCreatedClient: MqttClient | undefined;
+
 function mockOpenClient(): void {
   connectMock.mockImplementation((): MqttClient => {
     const client: MqttClient = createClientMock();
+    lastCreatedClient = client;
     // emits the CONNACK asynchronously, like a real client
     queueMicrotask((): void => {
       client.emit('connect', { cmd: 'connack', sessionPresent: false });
@@ -117,6 +120,26 @@ describe('SharedMqttResource', () => {
       await new Promise<void>((resolve: () => void): void => {
         setTimeout(resolve, 100);
       });
+    } finally {
+      SharedMqttResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
+  it('closes the sharers when the underlying connection dies', async () => {
+    const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
+    SharedMqttResource.maintainAlive = 0; // deterministic synchronous close
+    try {
+      mockOpenClient();
+
+      const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://shared-death.test');
+      const second = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://shared-death.test');
+
+      // a clean TCP disconnection emits only 'close': the underlying resource closes,
+      // and the sharers close with it
+      lastCreatedClient!.emit('close');
+
+      await first.closed;
+      await second.closed;
     } finally {
       SharedMqttResource.maintainAlive = previousMaintainAlive;
     }
