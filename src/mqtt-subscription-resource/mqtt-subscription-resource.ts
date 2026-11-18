@@ -19,6 +19,9 @@ import {
 import { subscribeToMqttClientSubscription } from './helpers.private/subscribe-to-mqtt-client-subscription.ts';
 
 /**
+ * The subscription manager of a MQTT connection: maps `subscribe` calls to broker
+ * subscriptions, shared between listeners with the same topic filter.
+ *
  * NOTE: internal: must be created through `newMqttSubscriptionResource`, which provides the
  * underlying mqtt client and the close stack. Direct construction is unsupported.
  *
@@ -255,6 +258,10 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
 
 /* INTERNAL */
 
+/**
+ * An active broker subscription, identified by its topic filter: the options it was
+ * established with (locked for its lifetime), and its reference counter.
+ */
 interface ActiveSubscription extends Required<MqttResourceSubscribeOptions> {
   readonly refCount: AsyncRefCount<void>;
 }

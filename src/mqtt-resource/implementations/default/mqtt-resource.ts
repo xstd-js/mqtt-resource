@@ -15,6 +15,22 @@ import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abi
 import { openMqttClient } from './helpers.private/open-mqtt-client.ts';
 import { swallowMqttClientErrors } from './helpers.private/swallow-mqtt-client-errors.ts';
 
+/**
+ * A live connection to a MQTT broker, exposed as a {@link Resource}.
+ *
+ * Opened through the static `MqttResource.open` action, which connects to the broker and
+ * resolves with the instance once the connection is established (CONNACK received).
+ *
+ * Closing the instance ends the underlying connection; conversely, the instance closes itself
+ * when the connection dies: a broker disconnection, an error, an end or the socket closing.
+ *
+ * @example
+ * ```ts
+ * const resource: MqttResource = await MqttResource.open.call(signal, 'mqtt://localhost:1883');
+ *
+ * await resource.publish.call(signal, 'greetings', 'hello');
+ * ```
+ */
 export class MqttResource extends Resource implements HavingMqttResourceAbilities {
   static #open: MqttResourceOpenAction<MqttResource> = new AsyncFunction<
     MqttResourceOpenArguments,
@@ -47,6 +63,14 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
     },
   );
 
+  /**
+   * Opens a connection to a MQTT broker and resolves with a new `MqttResource` instance
+   * managing it.
+   *
+   * Fails when the connection cannot be established (rejected CONNACK, premature close or
+   * error), or when the provided signal aborts, in which case the socket is destroyed
+   * synchronously.
+   */
   static get open(): MqttResourceOpenAction<MqttResource> {
     return this.#open;
   }
@@ -145,10 +169,12 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
     });
   }
 
+  /** Publishes a message on the broker. */
   get publish(): MqttResourcePublishAction {
     return this.#publish;
   }
 
+  /** Establishes a subscription, resolving with a resource emitting the received messages. */
   get subscribe(): MqttResourceSubscribeStream {
     return this.#subscribe;
   }

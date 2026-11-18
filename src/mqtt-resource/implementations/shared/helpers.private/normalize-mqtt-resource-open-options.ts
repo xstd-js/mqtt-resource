@@ -8,7 +8,9 @@ const DEFAULT_PORTS: ReadonlyMap<string, string> = new Map<string, string>([
 ]);
 
 export interface NormalizedMqttResourceOpenOptions {
+  /** The canonicalized url, stripped of its credentials. */
   readonly url: string;
+  /** The options, with the credentials extracted from the url merged in. */
   readonly options: MqttResourceOpenOptions;
 }
 

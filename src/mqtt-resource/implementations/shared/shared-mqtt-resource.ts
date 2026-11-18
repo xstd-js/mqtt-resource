@@ -22,6 +22,24 @@ import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abi
 import { MqttResource } from '../default/mqtt-resource.ts';
 import { normalizeMqttResourceOpenOptions } from './helpers.private/normalize-mqtt-resource-open-options.ts';
 
+/**
+ * A MQTT connection shared between multiple {@link SharedMqttResource} instances.
+ *
+ * Opened through the static `SharedMqttResource.open` action: opens with the same connection
+ * parameters (normalized url, `clientId`, `username` and `password`) reuse the same underlying
+ * {@link MqttResource} instead of opening a new connection, as long as it is alive.
+ *
+ * The instance behaves like the underlying resource it shares: closing it releases the sharer's
+ * reference, and the connection itself is closed when the last sharer closes (possibly after
+ * `SharedMqttResource.maintainAlive` milliseconds, allowing a subsequent open to reuse it).
+ *
+ * @example
+ * ```ts
+ * const resource: SharedMqttResource = await SharedMqttResource.open.call(signal, 'mqtt://localhost:1883');
+ *
+ * await resource.publish.call(signal, 'greetings', 'hello');
+ * ```
+ */
 export class SharedMqttResource extends Resource implements HavingMqttResourceAbilities {
   /**
    * The delay, in milliseconds, before the underlying connection is closed after its last
@@ -135,6 +153,13 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
     },
   );
 
+  /**
+   * Opens or joins the shared connection matching the given url and options, resolving with a
+   * new `SharedMqttResource` instance sharing it.
+   *
+   * Connections are keyed on the normalized url (stripped of its credentials) and the
+   * `clientId`, `username` and `password` options.
+   */
   static get open(): MqttResourceOpenAction<SharedMqttResource> {
     return this.#open;
   }
@@ -169,10 +194,12 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
     );
   }
 
+  /** Publishes a message on the broker. Fails when the instance is closed. */
   get publish(): MqttResourcePublishAction {
     return this.#publish;
   }
 
+  /** Establishes a subscription, resolving with a resource emitting the received messages. Fails when the instance is closed. */
   get subscribe(): MqttResourceSubscribeStream {
     return this.#subscribe;
   }
@@ -180,6 +207,9 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
 
 /* INTERNAL */
 
+/**
+ * A shared, possibly delayed, connection to a MQTT broker, and its reference counter.
+ */
 interface ActiveConnection {
   readonly refCount: AsyncRefCount<MqttResource>;
 }
