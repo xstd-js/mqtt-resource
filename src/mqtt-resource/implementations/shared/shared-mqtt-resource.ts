@@ -59,6 +59,14 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
       let activeConnection: ActiveConnection | undefined = this.#activeConnections.get(key);
 
       if (activeConnection === undefined) {
+        const removeActiveConnection = (): void => {
+          // deletes by identity: a newer connection may have replaced this one in the
+          // meantime, and must not be removed by this stale cleanup.
+          if (this.#activeConnections.get(key) === activeConnection) {
+            this.#activeConnections.delete(key);
+          }
+        };
+
         activeConnection = {
           refCount: new AsyncRefCount<MqttResource>(
             async (signal: AbortSignal): Promise<AsyncDisposableRef<MqttResource>> => {
@@ -68,12 +76,16 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
                 password,
               });
 
+              // A closed connection is unusable: the entry is deleted as soon as the underlying
+              // client starts closing (including when the connection dies), so that a concurrent
+              // or subsequent open establishes a fresh connection instead of reusing a dead one
+              // within the maintain-alive window.
+              client.closeSignal.addEventListener('abort', removeActiveConnection, {
+                once: true,
+              });
+
               const close = async (reason?: unknown): Promise<void> => {
-                // NOTE: the map entry is deleted only after a *fulfilled* close: a rejected
-                // close means either an abort-reuse (the entry must stay for the concurrent
-                // open) or a close failure (the entry stays reusable by the next open).
                 await client.close(reason);
-                this.#activeConnections.delete(key);
               };
 
               const maintainAlive: number = this.maintainAlive;

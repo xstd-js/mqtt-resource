@@ -145,6 +145,87 @@ describe('SharedMqttResource', () => {
     }
   });
 
+  it('establishes a fresh connection when reopening after the underlying connection died', async () => {
+    const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
+    SharedMqttResource.maintainAlive = 50;
+    try {
+      mockOpenClient();
+
+      const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://death.test', {
+        username: 'user',
+        password: 'secret',
+      });
+
+      // a clean TCP disconnection emits only 'close'
+      lastCreatedClient!.emit('close');
+      await first.closed;
+
+      // an open within the maintain-alive window must not be handed the dead connection
+      const second = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://death.test', {
+        username: 'user',
+        password: 'secret',
+      });
+
+      expect(connectMock).toHaveBeenCalledTimes(2);
+      expect((): void => second.throwIfClosed()).not.toThrow();
+
+      await second.close();
+
+      // let the maintain-alive window elapse (background close)
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 100);
+      });
+    } finally {
+      SharedMqttResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
+  it('keeps the replacement connection when the dead one finishes closing', async () => {
+    const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
+    SharedMqttResource.maintainAlive = 50;
+    try {
+      mockOpenClient();
+
+      const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://replacement.test', {
+        username: 'user',
+        password: 'secret',
+      });
+
+      lastCreatedClient!.emit('close');
+      await first.closed;
+
+      const second = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://replacement.test', {
+        username: 'user',
+        password: 'secret',
+      });
+      expect(connectMock).toHaveBeenCalledTimes(2);
+
+      // let the dead connection's maintain-alive window elapse: its delayed cleanup must
+      // not delete the replacement connection's entry
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 100);
+      });
+
+      const third = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://replacement.test', {
+        username: 'user',
+        password: 'secret',
+      });
+
+      // the live connection of `second` is reused: no third connection is established
+      expect(connectMock).toHaveBeenCalledTimes(2);
+
+      await second.close();
+      await third.close();
+
+      // let the maintain-alive window elapse (background close)
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 100);
+      });
+    } finally {
+      SharedMqttResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
   it('does not share connections when the credentials differ', async () => {
     const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
     SharedMqttResource.maintainAlive = 0;
