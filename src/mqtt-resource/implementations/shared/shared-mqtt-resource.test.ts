@@ -90,6 +90,42 @@ describe('SharedMqttResource', () => {
     }
   });
 
+  it('shares one connection between url-embedded credentials and equivalent options', async () => {
+    const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
+    SharedMqttResource.maintainAlive = 0;
+    try {
+      mockOpenClient();
+
+      const first = await SharedMqttResource.open.call(
+        NEVER_ABORTED,
+        'mqtt://user:secret@localhost',
+      );
+      const second = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
+        username: 'user',
+        password: 'secret',
+      });
+      try {
+        expect(connectMock).toHaveBeenCalledOnce();
+
+        // the embedded credentials are extracted: the connect uses the normalized url with
+        // the credentials as explicit options
+        expect(connectMock).toHaveBeenNthCalledWith(1, 'mqtt://localhost/', {
+          clientId: undefined,
+          username: 'user',
+          password: 'secret',
+          reconnectPeriod: 0,
+          autoUseTopicAlias: true,
+          autoAssignTopicAlias: true,
+        });
+      } finally {
+        await first.close();
+        await second.close();
+      }
+    } finally {
+      SharedMqttResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
   it('reuses the connection within the maintain-alive window after a close', async () => {
     const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
     SharedMqttResource.maintainAlive = 50;
@@ -243,7 +279,7 @@ describe('SharedMqttResource', () => {
       const third = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
 
       expect(connectMock).toHaveBeenCalledTimes(3);
-      expect(connectMock).toHaveBeenNthCalledWith(1, 'mqtt://localhost', {
+      expect(connectMock).toHaveBeenNthCalledWith(1, 'mqtt://localhost/', {
         clientId: undefined,
         username: 'user',
         password: 'secret',

@@ -20,7 +20,7 @@ import type { MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqt
 import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
 import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { MqttResource } from '../default/mqtt-resource.ts';
-import { normalizeMqttUrl } from './helpers.private/normalize-mqtt-url.ts';
+import { normalizeMqttResourceOpenOptions } from './helpers.private/normalize-mqtt-resource-open-options.ts';
 
 export class SharedMqttResource extends Resource implements HavingMqttResourceAbilities {
   /**
@@ -36,6 +36,11 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
    *
    * NOTE: connections never auto-reconnect: when the connection dies, every sharer closes and
    * the next open establishes a new connection.
+   *
+   * NOTE: the connection key is derived from the normalized url (stripped of its credentials)
+   * and the `clientId`, `username` and `password` options. Credentials embedded in the url are
+   * extracted and take precedence over the options (mirroring mqtt.js), so that an url with
+   * embedded credentials and an equivalent url using the options share the same connection.
    */
   static maintainAlive: number = 1000;
 
@@ -48,11 +53,21 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
     async (
       signal: AbortSignal,
       url: string | URL,
-      { clientId, username, password }: MqttResourceOpenOptions = {},
+      options: MqttResourceOpenOptions = {},
     ): Promise<SharedMqttResource> => {
+      const { url: normalizedUrl, options: normalizedOptions } = normalizeMqttResourceOpenOptions(
+        url,
+        options,
+      );
+
       const key: string = sha256(
         new TextEncoder().encode(
-          JSON.stringify([normalizeMqttUrl(url.toString()), clientId, username, password]),
+          JSON.stringify([
+            normalizedUrl,
+            normalizedOptions.clientId,
+            normalizedOptions.username,
+            normalizedOptions.password,
+          ]),
         ),
       ).toHex();
 
@@ -70,11 +85,11 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
         activeConnection = {
           refCount: new AsyncRefCount<MqttResource>(
             async (signal: AbortSignal): Promise<AsyncDisposableRef<MqttResource>> => {
-              const client: MqttResource = await MqttResource.open.call(signal, url, {
-                clientId,
-                username,
-                password,
-              });
+              const client: MqttResource = await MqttResource.open.call(
+                signal,
+                normalizedUrl,
+                normalizedOptions,
+              );
 
               // A closed connection is unusable: the entry is deleted as soon as the underlying
               // client starts closing (including when the connection dies), so that a concurrent
