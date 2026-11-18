@@ -21,6 +21,17 @@ import { subscribeToMqttClientSubscription } from './helpers.private/subscribe-t
 /**
  * NOTE: internal: must be created through `newMqttSubscriptionResource`, which provides the
  * underlying mqtt client and the close stack. Direct construction is unsupported.
+ *
+ * Listeners sharing the same topic filter share the same underlying broker subscription: the
+ * options of the first listener are locked for the lifetime of the subscription, and listeners
+ * opened with different options are rejected.
+ *
+ * With `retainHandling = 0`, the broker sends retained messages on the first SUBSCRIBE only:
+ * listeners joining later on an already-established topic do not receive retained messages.
+ *
+ * Messages delivered while a subscription is establishing are buffered and flushed right after
+ * the listener is returned: `listen()` must be called synchronously (or within a microtask)
+ * after the `subscribe` promise resolves, or the buffered messages are lost.
  */
 export class MqttSubscriptionResource extends ObservableAsyncFunction<
   MqttPublishPacket,
