@@ -59,6 +59,22 @@ describe('MqttResource', () => {
     expect(client.endAsync).toHaveBeenCalledExactlyOnceWith();
   });
 
+  it('publishes uint8array payloads unchanged', async () => {
+    const client: MqttClient = createClientMock();
+    mockOpenClient(client);
+
+    const resource: MqttResource = await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
+
+    const payload: Uint8Array = new Uint8Array([1, 2, 3]);
+    await resource.publish.call(NEVER_ABORTED, 'test/topic', payload);
+
+    // mqtt.js types the message as `string | Buffer`, but mqtt-packet serializes any
+    // Uint8Array: the payload is passed through without copy.
+    expect(vi.mocked(client.publishAsync).mock.calls[0]?.[1]).toBe(payload);
+
+    await resource.close(new CompleteError());
+  });
+
   it('does not emit MaxListenersExceededWarning with many subscriptions', async () => {
     const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
     MqttSubscriptionResource.maintainAlive = 0;

@@ -119,7 +119,9 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
       ): Promise<void> => {
         return this.#closeStack.runTask(
           async (signal: AbortSignal): Promise<void> => {
-            await abortify(this.#client.publishAsync(topic, payload as any, options), {
+            // NOTE: mqtt.js types the message as `string | Buffer`, but mqtt-packet
+            // serializes any Uint8Array: the wider type is passed through intentionally.
+            await abortify(this.#client.publishAsync(topic, payload as string | Buffer, options), {
               signal,
             });
           },
