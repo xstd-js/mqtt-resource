@@ -130,7 +130,21 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
               activeSubscription.retainAsPublished !== retainAsPublished ||
               activeSubscription.retainHandling !== retainHandling
             ) {
-              throw new Error(`Subscription to "${topic}" already locked.`);
+              const heldOptions: Required<MqttResourceSubscribeOptions> = {
+                qos: activeSubscription.qos,
+                noLocal: activeSubscription.noLocal,
+                retainAsPublished: activeSubscription.retainAsPublished,
+                retainHandling: activeSubscription.retainHandling,
+              };
+              const requestedOptions: Required<MqttResourceSubscribeOptions> = {
+                qos,
+                noLocal,
+                retainAsPublished,
+                retainHandling,
+              };
+              throw new Error(
+                `Subscription to "${topic}" already locked with ${JSON.stringify(heldOptions)} (requested ${JSON.stringify(requestedOptions)}).`,
+              );
             }
 
             const topicMatcher: MqttTopic = new MqttTopic(topic);

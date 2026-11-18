@@ -361,6 +361,31 @@ describe('MqttSubscriptionResource', () => {
     expect(client.unsubscribeAsync).toHaveBeenCalledExactlyOnceWith('test/topic');
   });
 
+  it('reports the held and requested options in the already-locked error', async () => {
+    const client: MqttClient = createClientMock();
+    client.subscribeAsync = vi.fn(async (topic: string): Promise<ISubscriptionGrant[]> => [
+      { topic, qos: 0 },
+    ]);
+    const { closeStack } = createCloseStack();
+    const subscriptionResource = newMqttSubscriptionResource({
+      nativeClient: client,
+      closeStack,
+    });
+
+    const first: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+      NEVER_ABORTED,
+      'test/topic',
+    );
+
+    await expect(
+      subscriptionResource.call(NEVER_ABORTED, 'test/topic', { qos: 1, retainAsPublished: true }),
+    ).rejects.toThrow(
+      'already locked with {"qos":0,"noLocal":false,"retainAsPublished":false,"retainHandling":0} (requested {"qos":1,"noLocal":false,"retainAsPublished":true,"retainHandling":0})',
+    );
+
+    await first.close();
+  });
+
   it('rejects when the underlying unsubscribe fails on close', async () => {
     const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
     MqttSubscriptionResource.maintainAlive = 0; // close() awaits the full unsubscribe
