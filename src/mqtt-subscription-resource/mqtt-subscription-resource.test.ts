@@ -45,7 +45,12 @@ describe('MqttSubscriptionResource', () => {
     client.subscribeAsync = vi.fn(async (): Promise<ISubscriptionGrant[]> => {
       client.emit('message', 'test/topic', Buffer.from('retained'), {
         cmd: 'publish',
-      } as IPublishPacket);
+        dup: false,
+        qos: 0,
+        retain: true,
+        topic: 'test/topic',
+        payload: Buffer.from('retained'),
+      });
       return [{ topic: 'test/topic', qos: 0 }];
     });
 
@@ -64,7 +69,14 @@ describe('MqttSubscriptionResource', () => {
       setTimeout(resolve, 10);
     });
 
-    expect(received).toEqual([{ topic: 'test/topic', payload: Buffer.from('retained') }]);
+    expect(received).toEqual([
+      {
+        topic: 'test/topic',
+        payload: Buffer.from('retained'),
+        qos: 0,
+        retain: true,
+      },
+    ]);
   });
 
   it('delivers messages published to the parent level of a multi-level wildcard subscription', async () => {
@@ -131,6 +143,54 @@ describe('MqttSubscriptionResource', () => {
     });
 
     expect(received).toEqual([{ topic: 'test/', payload: Buffer.from('empty') }]);
+  });
+
+  it('forwards the publish packet metadata (qos, retain, properties)', async () => {
+    const client: MqttClient = createClientMock();
+    const { closeStack } = createCloseStack();
+    const subscriptionResource = newMqttSubscriptionResource({
+      nativeClient: client,
+      closeStack,
+    });
+
+    client.subscribeAsync = vi.fn(async (): Promise<ISubscriptionGrant[]> => [
+      { topic: 'test/topic', qos: 0 },
+    ]);
+
+    const listener: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+      NEVER_ABORTED,
+      'test/topic',
+    );
+
+    const received: MqttPublishPacket[] = [];
+    listener.listen((packet: MqttPublishPacket): void => {
+      received.push(packet);
+    });
+
+    client.emit('message', 'test/topic', Buffer.from('hello'), {
+      cmd: 'publish',
+      dup: false,
+      qos: 1,
+      retain: true,
+      topic: 'test/topic',
+      payload: Buffer.from('hello'),
+      properties: { userProperties: { source: 'sensor' } },
+    });
+
+    // let the macrotasks run (message dispatch, buffered values flush...)
+    await new Promise<void>((resolve: () => void): void => {
+      setTimeout(resolve, 10);
+    });
+
+    expect(received).toEqual([
+      {
+        topic: 'test/topic',
+        payload: Buffer.from('hello'),
+        qos: 1,
+        retain: true,
+        properties: { userProperties: { source: 'sensor' } },
+      },
+    ]);
   });
 
   it('rejects when the underlying unsubscribe fails on close', async () => {

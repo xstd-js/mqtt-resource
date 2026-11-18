@@ -128,15 +128,22 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
             const onClientMessage = (
               topic: string,
               payload: Buffer,
-              _packet: IPublishPacket,
+              packet: IPublishPacket,
             ): void => {
               if (!topicMatcher.matches(topic)) {
                 return;
               }
+              const publishPacket: MqttPublishPacket = {
+                topic,
+                payload,
+                qos: packet.qos,
+                retain: packet.retain,
+                properties: packet.properties,
+              };
               if (established && emitFunction !== undefined) {
-                emitFunction({ topic, payload });
+                emitFunction(publishPacket);
               } else {
-                pendingMessages.push({ topic, payload });
+                pendingMessages.push(publishPacket);
               }
             };
 
