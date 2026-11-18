@@ -20,19 +20,27 @@ export async function subscribeToMqttClientSubscription(
     signal,
   }: SubscribeToMqttClientSubscriptionOptions = {},
 ): Promise<void> {
-  const [granted]: readonly ISubscriptionGrant[] = await client.subscribeAsync(topic, {
-    qos,
-    nl: noLocal,
-    rap: retainAsPublished,
-    rh: retainHandling,
-  });
+  const [granted]: readonly (ISubscriptionGrant | undefined)[] = await client.subscribeAsync(
+    topic,
+    {
+      qos,
+      nl: noLocal,
+      rap: retainAsPublished,
+      rh: retainHandling,
+    },
+  );
 
   if (signal?.aborted) {
-    await client.unsubscribeAsync(topic);
-    throw signal.reason;
+    const reason: unknown = signal.reason;
+    await rollbackUnsubscribe(client, topic, reason);
+    throw reason;
   }
 
-  if (qos !== undefined && granted.qos > 2) {
+  if (granted === undefined) {
+    throw new Error(`Cannot subscribe to "${topic}": the broker granted no subscription.`);
+  }
+
+  if (granted.qos > 2) {
     // The broker rejected the subscription (granted qos 0x80 or any MQTT5 error code):
     // nothing was subscribed, so there is nothing to roll back.
     throw new Error(
@@ -40,8 +48,34 @@ export async function subscribeToMqttClientSubscription(
     );
   }
 
-  if (qos !== undefined && granted.qos < qos) {
+  if (granted.qos < qos) {
+    const downgradeError: Error = new Error(
+      `Cannot subscribe to "${topic}" with a qos of ${qos}. Granted ${granted.qos}.`,
+    );
+    await rollbackUnsubscribe(client, topic, downgradeError);
+    throw downgradeError;
+  }
+}
+
+/* INTERNAL */
+
+/**
+ * Unsubscribes as a rollback. A rollback failure is wrapped into a `SuppressedError`
+ * (the rollback error being primary, the primary error being suppressed): nothing
+ * is dropped, and the rollback error surfaces to the caller.
+ */
+async function rollbackUnsubscribe(
+  client: MqttClient,
+  topic: string,
+  primaryError: unknown,
+): Promise<void> {
+  try {
     await client.unsubscribeAsync(topic);
-    throw new Error(`Cannot subscribe to "${topic}" with a qos of ${qos}. Granted ${granted.qos}.`);
+  } catch (rollbackError: unknown) {
+    throw new SuppressedError(
+      rollbackError,
+      primaryError,
+      `Failed to unsubscribe from "${topic}" during the rollback.`,
+    );
   }
 }
