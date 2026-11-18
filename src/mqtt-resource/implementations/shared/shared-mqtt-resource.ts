@@ -20,6 +20,7 @@ import type { MqttResourceSubscribeOptions } from '../../abilities/subscribe/mqt
 import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
 import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { MqttResource } from '../default/mqtt-resource.ts';
+import { normalizeMqttUrl } from './helpers.private/normalize-mqtt-url.ts';
 
 export class SharedMqttResource extends Resource implements HavingMqttResourceAbilities {
   static maintainAlive: number = 1000;
@@ -36,7 +37,9 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
       { clientId, username, password }: MqttResourceOpenOptions = {},
     ): Promise<SharedMqttResource> => {
       const key: string = sha256(
-        new TextEncoder().encode(JSON.stringify([url.toString(), clientId, username, password])),
+        new TextEncoder().encode(
+          JSON.stringify([normalizeMqttUrl(url.toString()), clientId, username, password]),
+        ),
       ).toHex();
 
       let activeConnection: ActiveConnection | undefined = this.#activeConnections.get(key);
@@ -52,7 +55,11 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
               });
 
               const close = async (reason?: unknown): Promise<void> => {
-                return client.close(reason);
+                // NOTE: the map entry is deleted only after a *fulfilled* close: a rejected
+                // close means either an abort-reuse (the entry must stay for the concurrent
+                // open) or a close failure (the entry stays reusable by the next open).
+                await client.close(reason);
+                this.#activeConnections.delete(key);
               };
 
               const maintainAlive: number = this.maintainAlive;

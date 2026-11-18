@@ -63,6 +63,65 @@ describe('SharedMqttResource', () => {
     }
   });
 
+  it('shares one connection for equivalent urls with an explicit default port', async () => {
+    const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
+    SharedMqttResource.maintainAlive = 0;
+    try {
+      mockOpenClient();
+
+      const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
+        username: 'user',
+        password: 'secret',
+      });
+      const second = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost:1883', {
+        username: 'user',
+        password: 'secret',
+      });
+
+      await first.close();
+      await second.close();
+
+      expect(connectMock).toHaveBeenCalledOnce();
+    } finally {
+      SharedMqttResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
+  it('reuses the connection within the maintain-alive window after a close', async () => {
+    const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
+    SharedMqttResource.maintainAlive = 50;
+    try {
+      mockOpenClient();
+
+      const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
+        username: 'user',
+        password: 'secret',
+      });
+      await first.close();
+      const second = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
+        username: 'user',
+        password: 'secret',
+      });
+      const third = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
+        username: 'user',
+        password: 'secret',
+      });
+
+      // the delayed close of `first` was aborted by `second`: `third` shares the same connection
+      expect(connectMock).toHaveBeenCalledOnce();
+
+      await second.close();
+      await third.close();
+
+      // let the maintain-alive window elapse (background close)
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 100);
+      });
+    } finally {
+      SharedMqttResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
   it('does not share connections when the credentials differ', async () => {
     const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
     SharedMqttResource.maintainAlive = 0;
