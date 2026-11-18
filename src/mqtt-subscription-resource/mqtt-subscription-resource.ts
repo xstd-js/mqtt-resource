@@ -18,6 +18,10 @@ import {
 } from './helpers.private/mqtt-subscription-resource-context.ts';
 import { subscribeToMqttClientSubscription } from './helpers.private/subscribe-to-mqtt-client-subscription.ts';
 
+/**
+ * NOTE: internal: must be created through `newMqttSubscriptionResource`, which provides the
+ * underlying mqtt client and the close stack. Direct construction is unsupported.
+ */
 export class MqttSubscriptionResource extends ObservableAsyncFunction<
   MqttPublishPacket,
   MqttResourceSubscribeArguments
