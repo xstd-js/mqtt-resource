@@ -1114,7 +1114,7 @@ __metadata:
     "@xstd/async-ref-count": "npm:^1.0.0"
     "@xstd/custom-error": "npm:^0.2.0"
     "@xstd/listener-resource": "npm:^1.0.1"
-    "@xstd/mqtt-topic": "npm:^1.0.0"
+    "@xstd/mqtt-topic": "npm:^1.1.0"
     "@xstd/observable-async-function": "npm:^1.0.0"
     "@xstd/resource": "npm:^1.0.0"
     "@xstd/sha256": "npm:^1.0.0"
@@ -1128,10 +1128,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@xstd/mqtt-topic@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "@xstd/mqtt-topic@npm:1.0.0"
-  checksum: 10c0/45f2eac5eaef6269e23c624576a54434fa5bcb14b16e5739148dd3358af43b5b851123f9116f357285206a13fa70e026993d420b2c1bd7de46c3fc4fd2bbfe73
+"@xstd/mqtt-topic@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@xstd/mqtt-topic@npm:1.1.0"
+  checksum: 10c0/5fd3f858fc5ecc65afacce89e124a1b9ca123abbf8e57d0d807a356ab5753cac504bda4ef038478a90fff23f5467d5e026f1410c61414abb51e88e0d5aeeeb61
   languageName: node
   linkType: hard
 

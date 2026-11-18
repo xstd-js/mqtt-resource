@@ -67,6 +67,72 @@ describe('MqttSubscriptionResource', () => {
     expect(received).toEqual([{ topic: 'test/topic', payload: Buffer.from('retained') }]);
   });
 
+  it('delivers messages published to the parent level of a multi-level wildcard subscription', async () => {
+    const client: MqttClient = createClientMock();
+    const { closeStack } = createCloseStack();
+    const subscriptionResource = newMqttSubscriptionResource({
+      nativeClient: client,
+      closeStack,
+    });
+
+    client.subscribeAsync = vi.fn(async (): Promise<ISubscriptionGrant[]> => [
+      { topic: 'test/#', qos: 0 },
+    ]);
+
+    const listener: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+      NEVER_ABORTED,
+      'test/#',
+    );
+
+    const received: MqttPublishPacket[] = [];
+    listener.listen((packet: MqttPublishPacket): void => {
+      received.push(packet);
+    });
+
+    // per MQTT 4.7.1.2, 'test/#' also matches the parent level 'test'
+    client.emit('message', 'test', Buffer.from('parent'), { cmd: 'publish' } as IPublishPacket);
+
+    // let the macrotasks run (message dispatch, buffered values flush...)
+    await new Promise<void>((resolve: () => void): void => {
+      setTimeout(resolve, 10);
+    });
+
+    expect(received).toEqual([{ topic: 'test', payload: Buffer.from('parent') }]);
+  });
+
+  it('delivers messages published to an empty level matched by a single-level wildcard', async () => {
+    const client: MqttClient = createClientMock();
+    const { closeStack } = createCloseStack();
+    const subscriptionResource = newMqttSubscriptionResource({
+      nativeClient: client,
+      closeStack,
+    });
+
+    client.subscribeAsync = vi.fn(async (): Promise<ISubscriptionGrant[]> => [
+      { topic: 'test/+', qos: 0 },
+    ]);
+
+    const listener: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+      NEVER_ABORTED,
+      'test/+',
+    );
+
+    const received: MqttPublishPacket[] = [];
+    listener.listen((packet: MqttPublishPacket): void => {
+      received.push(packet);
+    });
+
+    // per MQTT 4.7.1.2, 'test/+' also matches 'test/' (zero-length level)
+    client.emit('message', 'test/', Buffer.from('empty'), { cmd: 'publish' } as IPublishPacket);
+
+    // let the macrotasks run (message dispatch, buffered values flush...)
+    await new Promise<void>((resolve: () => void): void => {
+      setTimeout(resolve, 10);
+    });
+
+    expect(received).toEqual([{ topic: 'test/', payload: Buffer.from('empty') }]);
+  });
+
   it('rejects when the underlying unsubscribe fails on close', async () => {
     const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
     MqttSubscriptionResource.maintainAlive = 0; // close() awaits the full unsubscribe
