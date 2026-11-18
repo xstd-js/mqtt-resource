@@ -1,6 +1,6 @@
 {
   "name": "@xstd/mqtt-resource",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "type": "module",
   "description": "An MQTT client based on the Resource primitive: publish and subscribe with abortable, shared connections",
   "keywords": [
