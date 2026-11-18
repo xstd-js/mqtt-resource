@@ -151,6 +151,28 @@ describe('MqttResource', () => {
     expect(client.endAsync).toHaveBeenCalledExactlyOnceWith();
   });
 
+  it('rejects with the abort reason when the socket errors during the teardown of an aborted open', async () => {
+    const abortController: AbortController = new AbortController();
+    const client: MqttClient = createClientMock();
+    client.endAsync = vi.fn(async (): Promise<void> => {
+      // a socket error emitted while no 'error' listener is attached would throw uncaught
+      client.emit('error', new Error('socket error during teardown'));
+    });
+    connectMock.mockReturnValue(client); // never emits 'connect' by itself
+
+    const clientPromise: Promise<MqttResource> = MqttResource.open.call(
+      abortController.signal,
+      'mqtt://localhost',
+    );
+
+    // resolves the wait, then aborts before the open continuation runs: the open must
+    // tear the client down
+    client.emit('connect', { cmd: 'connack', sessionPresent: false });
+    abortController.abort();
+
+    await expect(clientPromise).rejects.toBe(abortController.signal.reason);
+  });
+
   it('does not produce unhandled rejections when an event-triggered close fails', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((): void => {});
     const client: MqttClient = createClientMock();

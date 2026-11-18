@@ -13,6 +13,7 @@ import type { MqttResourcePublishPayload } from '../../abilities/publish/mqtt-re
 import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
 import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
 import { openMqttClient } from './helpers.private/open-mqtt-client.ts';
+import { swallowMqttClientErrors } from './helpers.private/swallow-mqtt-client-errors.ts';
 
 export class MqttResource extends Resource implements HavingMqttResourceAbilities {
   static #open: MqttResourceOpenAction<MqttResource> = new AsyncFunction<
@@ -32,13 +33,12 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
       // managed by the subscription resources, so no arbitrary cap must apply.
       client.setMaxListeners(0);
 
-      if (signal?.aborted) {
+      if (signal?.aborted || !client.connected) {
+        swallowMqttClientErrors(client);
         await client.endAsync();
-        throw signal.reason;
-      }
-
-      if (!client.connected) {
-        await client.endAsync();
+        if (signal?.aborted) {
+          throw signal.reason;
+        }
         throw new Error('MqttClient not open.');
       }
 

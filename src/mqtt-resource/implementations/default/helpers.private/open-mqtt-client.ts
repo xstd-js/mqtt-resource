@@ -1,5 +1,6 @@
 import mqtt, { type MqttClient } from 'mqtt';
 import type { MqttResourceOpenOptions } from '../../../abilities/open/mqtt-resource-open-options.ts';
+import { swallowMqttClientErrors } from './swallow-mqtt-client-errors.ts';
 
 /**
  * Opens an `mqtt` client and waits for its CONNACK, mirroring `mqtt.connectAsync` semantics
@@ -35,19 +36,21 @@ export function openMqttClient(
       };
       const onConnect = settleWithClient;
       const onEnd = settleWithClient;
-      const onError = (error: unknown): void => {
+      const terminateClient = (): void => {
         removeListeners();
+        swallowMqttClientErrors(client);
         client.end(true);
+      };
+      const onError = (error: unknown): void => {
+        terminateClient();
         reject(error);
       };
       const onClose = (): void => {
-        removeListeners();
-        client.end(true);
+        terminateClient();
         reject(new Error("Couldn't connect to server"));
       };
       const onAbort = (): void => {
-        removeListeners();
-        client.end(true);
+        terminateClient();
         reject(signal?.reason);
       };
 

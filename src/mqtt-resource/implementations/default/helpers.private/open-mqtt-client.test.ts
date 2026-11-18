@@ -63,6 +63,22 @@ describe('openMqttClient', () => {
     expect(client.end).toHaveBeenCalledExactlyOnceWith(true);
   });
 
+  it('does not crash when the socket errors while the client is force-closed after a failed connect', async () => {
+    const client: MqttClient = createClientMock();
+    client.end = vi.fn((): MqttClient => {
+      // a socket error emitted while no 'error' listener is attached would throw uncaught
+      client.emit('error', new Error('error during force close'));
+      return client;
+    });
+    connectMock.mockReturnValue(client); // never emits 'connect'
+
+    const clientPromise: Promise<MqttClient> = openMqttClient(NEVER_ABORTED, 'mqtt://localhost');
+
+    client.emit('error', new Error('connect failed'));
+
+    await expect(clientPromise).rejects.toThrow('connect failed');
+  });
+
   it('rejects with the abort reason when the signal aborts while connecting', async () => {
     const abortController: AbortController = new AbortController();
     connectMock.mockReturnValue(createClientMock()); // never emits 'connect'
