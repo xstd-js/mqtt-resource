@@ -118,6 +118,23 @@ describe('MqttResource', () => {
     expect(client.endAsync).toHaveBeenCalledExactlyOnceWith();
   });
 
+  it('closes the client when it is not connected after the connect', async () => {
+    const client: MqttClient = createClientMock();
+    client.connected = false;
+    connectMock.mockReturnValue(client); // never emits 'connect'
+
+    const clientPromise: Promise<MqttResource> = MqttResource.open.call(
+      NEVER_ABORTED,
+      'mqtt://localhost',
+    );
+
+    // mirrors mqtt.js 'connectAsync' semantics: the wait resolves on 'end'
+    client.emit('end');
+
+    await expect(clientPromise).rejects.toThrow('MqttClient not open.');
+    expect(client.endAsync).toHaveBeenCalledExactlyOnceWith();
+  });
+
   it('does not produce unhandled rejections when an event-triggered close fails', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((): void => {});
     const client: MqttClient = createClientMock();

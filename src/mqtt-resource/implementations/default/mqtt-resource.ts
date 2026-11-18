@@ -37,6 +37,11 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
         throw signal.reason;
       }
 
+      if (!client.connected) {
+        await client.endAsync();
+        throw new Error('MqttClient not open.');
+      }
+
       return new MqttResource(client);
     },
   );
@@ -57,10 +62,6 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
     });
 
     this.#client = client;
-
-    if (!this.#client.connected) {
-      throw new Error('MqttClient not open.');
-    }
 
     // Event-triggered closes may fail (e.g. 'endAsync' rejecting on an already dead
     // connection); their error is reported since no caller observes the close promise.
