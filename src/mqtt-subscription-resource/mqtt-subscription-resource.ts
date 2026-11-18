@@ -67,7 +67,11 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
 
             if (activeSubscription === undefined) {
               const removeActiveSubscription = (): void => {
-                this.#activeSubscriptions.delete(topic);
+                // deletes by identity: a newer subscription may have replaced this one in the
+                // meantime, and must not be removed by this stale cleanup.
+                if (this.#activeSubscriptions.get(topic) === activeSubscription) {
+                  this.#activeSubscriptions.delete(topic);
+                }
               };
 
               activeSubscription = {
