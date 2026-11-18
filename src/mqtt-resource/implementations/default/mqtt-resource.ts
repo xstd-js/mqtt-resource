@@ -2,7 +2,7 @@ import { abortify } from '@xstd/abortable';
 import { AsyncFunction } from '@xstd/async-function';
 import { CompleteError } from '@xstd/custom-error';
 import { CloseStack, Resource } from '@xstd/resource';
-import mqtt, { type IDisconnectPacket, type MqttClient } from 'mqtt';
+import { type IDisconnectPacket, type MqttClient } from 'mqtt';
 import { newMqttSubscriptionResource } from '../../../mqtt-subscription-resource/helpers.private/mqtt-subscription-resource-context.ts';
 import type { MqttResourceOpenAction } from '../../abilities/open/mqtt-resource-open-action.ts';
 import type { MqttResourceOpenArguments } from '../../abilities/open/mqtt-resource-open-arguments.ts';
@@ -12,6 +12,7 @@ import type { MqttResourcePublishOptions } from '../../abilities/publish/mqtt-re
 import type { MqttResourcePublishPayload } from '../../abilities/publish/mqtt-resource-publish-payload.ts';
 import type { MqttResourceSubscribeStream } from '../../abilities/subscribe/mqtt-resource-subscribe-stream.ts';
 import type { HavingMqttResourceAbilities } from '../../having-mqtt-resource-abilities.ts';
+import { openMqttClient } from './helpers.private/open-mqtt-client.ts';
 
 export class MqttResource extends Resource implements HavingMqttResourceAbilities {
   static #open: MqttResourceOpenAction<MqttResource> = new AsyncFunction<
@@ -25,12 +26,7 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
     ): Promise<MqttResource> => {
       signal?.throwIfAborted();
 
-      const client: MqttClient = await mqtt.connectAsync(url.toString(), {
-        ...options,
-        reconnectPeriod: 0,
-        autoUseTopicAlias: true,
-        autoAssignTopicAlias: true,
-      });
+      const client: MqttClient = await openMqttClient(signal, url.toString(), options);
 
       // One 'message' listener is registered per active subscription; their lifecycle is
       // managed by the subscription resources, so no arbitrary cap must apply.

@@ -7,10 +7,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { MqttSubscriptionResource } from '../../../mqtt-subscription-resource/mqtt-subscription-resource.ts';
 import { MqttResource } from './mqtt-resource.ts';
 
-const connectAsyncMock = vi.hoisted(() => vi.fn());
+const connectMock = vi.hoisted(() => vi.fn());
 
 vi.mock('mqtt', () => {
-  return { default: { connectAsync: connectAsyncMock } };
+  return { default: { connect: connectMock } };
 });
 
 function createClientMock(): MqttClient {
@@ -19,6 +19,7 @@ function createClientMock(): MqttClient {
     connected: true,
     // NOTE: `setMaxListeners` is intentionally NOT stubbed: the real EventEmitter
     // implementation must be used so that the production cap actually applies.
+    end: vi.fn((): MqttClient => client),
     endAsync: vi.fn(async (): Promise<void> => undefined),
     publishAsync: vi.fn(async (): Promise<void> => undefined),
     subscribeAsync: vi.fn(async (topic: string): Promise<ISubscriptionGrant[]> => [
@@ -29,10 +30,20 @@ function createClientMock(): MqttClient {
   return client;
 }
 
+function mockOpenClient(client: MqttClient): void {
+  connectMock.mockImplementation((): MqttClient => {
+    // emits the CONNACK asynchronously, like a real client
+    queueMicrotask((): void => {
+      client.emit('connect', { cmd: 'connack', sessionPresent: false });
+    });
+    return client;
+  });
+}
+
 describe('MqttResource', () => {
   it('publishes and closes', async () => {
     const client: MqttClient = createClientMock();
-    connectAsyncMock.mockResolvedValue(client);
+    mockOpenClient(client);
 
     const resource: MqttResource = await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
 
@@ -58,7 +69,7 @@ describe('MqttResource', () => {
     process.on('warning', onWarning);
     try {
       const client: MqttClient = createClientMock();
-      connectAsyncMock.mockResolvedValue(client);
+      mockOpenClient(client);
 
       const resource: MqttResource = await MqttResource.open.call(
         NEVER_ABORTED,
@@ -96,7 +107,7 @@ describe('MqttResource', () => {
 
   it('closes when the client emits close (clean connection loss)', async () => {
     const client: MqttClient = createClientMock();
-    connectAsyncMock.mockResolvedValue(client);
+    mockOpenClient(client);
 
     const resource: MqttResource = await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
 
@@ -113,7 +124,7 @@ describe('MqttResource', () => {
     client.endAsync = vi.fn(async (): Promise<void> => {
       throw new Error('end failed');
     });
-    connectAsyncMock.mockResolvedValue(client);
+    mockOpenClient(client);
 
     await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
 

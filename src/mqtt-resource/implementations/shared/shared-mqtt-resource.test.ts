@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SharedMqttResource } from './shared-mqtt-resource.ts';
 
-const connectAsyncMock = vi.hoisted(() => vi.fn());
+const connectMock = vi.hoisted(() => vi.fn());
 
 vi.mock('mqtt', () => {
-  return { default: { connectAsync: connectAsyncMock } };
+  return { default: { connect: connectMock } };
 });
 
 function createClientMock(): MqttClient {
@@ -22,16 +22,27 @@ function createClientMock(): MqttClient {
   return client;
 }
 
+function mockOpenClient(): void {
+  connectMock.mockImplementation((): MqttClient => {
+    const client: MqttClient = createClientMock();
+    // emits the CONNACK asynchronously, like a real client
+    queueMicrotask((): void => {
+      client.emit('connect', { cmd: 'connack', sessionPresent: false });
+    });
+    return client;
+  });
+}
+
 describe('SharedMqttResource', () => {
   afterEach(() => {
-    connectAsyncMock.mockReset();
+    connectMock.mockReset();
   });
 
   it('shares one connection for identical options in any property order', async () => {
     const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
     SharedMqttResource.maintainAlive = 0;
     try {
-      connectAsyncMock.mockImplementation(async (): Promise<MqttClient> => createClientMock());
+      mockOpenClient();
 
       const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
         username: 'user',
@@ -42,7 +53,7 @@ describe('SharedMqttResource', () => {
         username: 'user',
       });
 
-      expect(connectAsyncMock).toHaveBeenCalledOnce();
+      expect(connectMock).toHaveBeenCalledOnce();
       expect(second.publish).not.toBe(first.publish); // distinct wrappers, same connection
 
       await first.close();
@@ -56,7 +67,7 @@ describe('SharedMqttResource', () => {
     const previousMaintainAlive: number = SharedMqttResource.maintainAlive;
     SharedMqttResource.maintainAlive = 0;
     try {
-      connectAsyncMock.mockImplementation(async (): Promise<MqttClient> => createClientMock());
+      mockOpenClient();
 
       const first = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost', {
         username: 'user',
@@ -68,8 +79,8 @@ describe('SharedMqttResource', () => {
       });
       const third = await SharedMqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
 
-      expect(connectAsyncMock).toHaveBeenCalledTimes(3);
-      expect(connectAsyncMock).toHaveBeenNthCalledWith(1, 'mqtt://localhost', {
+      expect(connectMock).toHaveBeenCalledTimes(3);
+      expect(connectMock).toHaveBeenNthCalledWith(1, 'mqtt://localhost', {
         clientId: undefined,
         username: 'user',
         password: 'secret',
