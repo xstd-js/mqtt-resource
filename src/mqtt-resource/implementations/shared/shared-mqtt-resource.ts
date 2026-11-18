@@ -23,6 +23,20 @@ import { MqttResource } from '../default/mqtt-resource.ts';
 import { normalizeMqttUrl } from './helpers.private/normalize-mqtt-url.ts';
 
 export class SharedMqttResource extends Resource implements HavingMqttResourceAbilities {
+  /**
+   * The delay, in milliseconds, before the underlying connection is closed after its last
+   * sharer closes.
+   *
+   * - `> 0` (default): the close runs in the background after this delay, and an open with the
+   *   same url and credentials within the window reuses the live connection (the delayed close
+   *   is aborted). The sharer's `close()` resolves immediately without waiting for the
+   *   connection to end; close failures are reported, not propagated.
+   * - `<= 0`: the connection closes synchronously during `close()`, and its failure propagates
+   *   to the closer.
+   *
+   * NOTE: connections never auto-reconnect: when the connection dies, every sharer closes and
+   * the next open establishes a new connection.
+   */
   static maintainAlive: number = 1000;
 
   static #activeConnections = new Map<string /* key */, ActiveConnection>();

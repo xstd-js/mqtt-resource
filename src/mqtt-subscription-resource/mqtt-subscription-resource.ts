@@ -22,6 +22,19 @@ export class MqttSubscriptionResource extends ObservableAsyncFunction<
   MqttPublishPacket,
   MqttResourceSubscribeArguments
 > {
+  /**
+   * The delay, in milliseconds, before the underlying broker subscription is released after
+   * its last listener closes.
+   *
+   * - `> 0` (default): the unsubscribe runs in the background after this delay, and a listener
+   *   opened for the same topic within the window reuses the live subscription (the delayed
+   *   release is aborted). The listener's `close()` resolves immediately without waiting for
+   *   the unsubscribe; unsubscribe failures are reported, not propagated. When the connection
+   *   is already gone when the delay elapses, the unsubscribe is skipped: the broker already
+   *   dropped the subscription with its `clean` session.
+   * - `<= 0`: the unsubscribe runs synchronously during `close()`, and its failure propagates
+   *   to the closer.
+   */
   static maintainAlive: number = 1000;
 
   readonly #activeSubscriptions: Map<string /* topic */, ActiveSubscription>;

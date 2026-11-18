@@ -193,6 +193,51 @@ describe('MqttSubscriptionResource', () => {
     ]);
   });
 
+  it('delays the unsubscribe within the maintain-alive window and reuses the subscription', async () => {
+    const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
+    MqttSubscriptionResource.maintainAlive = 50;
+    try {
+      const client: MqttClient = createClientMock();
+      client.subscribeAsync = vi.fn(async (topic: string): Promise<ISubscriptionGrant[]> => [
+        { topic, qos: 0 },
+      ]);
+      const { closeStack } = createCloseStack();
+      const subscriptionResource = newMqttSubscriptionResource({
+        nativeClient: client,
+        closeStack,
+      });
+
+      const first: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+        NEVER_ABORTED,
+        'test/topic',
+      );
+      await first.close();
+
+      // within the window: the unsubscribe is delayed, not performed yet
+      expect(client.unsubscribeAsync).not.toHaveBeenCalled();
+
+      const second: ListenerResource<MqttPublishPacket> = await subscriptionResource.call(
+        NEVER_ABORTED,
+        'test/topic',
+      );
+
+      // the live subscription is reused: no additional subscribe
+      expect(client.subscribeAsync).toHaveBeenCalledOnce();
+      expect(client.unsubscribeAsync).not.toHaveBeenCalled();
+
+      await second.close();
+
+      // let the maintain-alive window elapse (background unsubscribe)
+      await new Promise<void>((resolve: () => void): void => {
+        setTimeout(resolve, 100);
+      });
+
+      expect(client.unsubscribeAsync).toHaveBeenCalledExactlyOnceWith('test/topic');
+    } finally {
+      MqttSubscriptionResource.maintainAlive = previousMaintainAlive;
+    }
+  });
+
   it('rejects when the underlying unsubscribe fails on close', async () => {
     const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
     MqttSubscriptionResource.maintainAlive = 0; // close() awaits the full unsubscribe
