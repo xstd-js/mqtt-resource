@@ -147,7 +147,6 @@ export class SharedMqttResource extends Resource implements HavingMqttResourceAb
   private constructor(shared: SharedAsyncDisposableRef<MqttResource>) {
     super((reason: unknown): Promise<void> => shared.close(reason));
 
-    // TODO should probably use a close stack here?
     this.#shared = shared;
     this.closesWith(shared.value);
 
