@@ -75,6 +75,37 @@ describe('MqttResource', () => {
     await resource.close(new CompleteError());
   });
 
+  it('publishes mqtt v5 properties unchanged', async () => {
+    const client: MqttClient = createClientMock();
+    mockOpenClient(client);
+
+    const resource: MqttResource = await MqttResource.open.call(NEVER_ABORTED, 'mqtt://localhost');
+
+    const correlationData: Uint8Array = new Uint8Array([1, 2, 3]);
+    await resource.publish.call(NEVER_ABORTED, 'test/topic', 'hello', {
+      qos: 1,
+      properties: {
+        payloadFormatIndicator: true,
+        responseTopic: 'test/response',
+        correlationData,
+        userProperties: { source: 'sensor' },
+      },
+    });
+
+    // the properties are passed through to the native client as-is
+    expect(client.publishAsync).toHaveBeenCalledExactlyOnceWith('test/topic', 'hello', {
+      qos: 1,
+      properties: {
+        payloadFormatIndicator: true,
+        responseTopic: 'test/response',
+        correlationData,
+        userProperties: { source: 'sensor' },
+      },
+    });
+
+    await resource.close(new CompleteError());
+  });
+
   it('does not emit MaxListenersExceededWarning with many subscriptions', async () => {
     const previousMaintainAlive: number = MqttSubscriptionResource.maintainAlive;
     MqttSubscriptionResource.maintainAlive = 0;

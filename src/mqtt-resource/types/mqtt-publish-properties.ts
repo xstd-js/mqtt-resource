@@ -1,4 +1,4 @@
-export type MqttUserProperties = { readonly [key: string]: string | readonly string[] };
+export type MqttUserProperties = Readonly<Record<string, string | readonly string[]>>;
 
 export interface MqttPublishProperties {
   readonly payloadFormatIndicator?: boolean;

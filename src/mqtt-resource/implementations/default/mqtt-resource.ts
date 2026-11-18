@@ -2,7 +2,7 @@ import { abortify } from '@xstd/abortable';
 import { AsyncFunction } from '@xstd/async-function';
 import { CompleteError } from '@xstd/custom-error';
 import { CloseStack, Resource } from '@xstd/resource';
-import { type IDisconnectPacket, type MqttClient } from 'mqtt';
+import { type IClientPublishOptions, type IDisconnectPacket, type MqttClient } from 'mqtt';
 import { newMqttSubscriptionResource } from '../../../mqtt-subscription-resource/helpers.private/mqtt-subscription-resource-context.ts';
 import type { MqttResourceOpenAction } from '../../abilities/open/mqtt-resource-open-action.ts';
 import type { MqttResourceOpenArguments } from '../../abilities/open/mqtt-resource-open-arguments.ts';
@@ -119,11 +119,19 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
       ): Promise<void> => {
         return this.#closeStack.runTask(
           async (signal: AbortSignal): Promise<void> => {
-            // NOTE: mqtt.js types the message as `string | Buffer`, but mqtt-packet
-            // serializes any Uint8Array: the wider type is passed through intentionally.
-            await abortify(this.#client.publishAsync(topic, payload as string | Buffer, options), {
-              signal,
-            });
+            // NOTE: mqtt.js types the message as `string | Buffer` and the properties'
+            // `correlationData` as `Buffer`, but mqtt-packet serializes any Uint8Array:
+            // the wider types are passed through intentionally.
+            await abortify(
+              this.#client.publishAsync(
+                topic,
+                payload as string | Buffer,
+                options as IClientPublishOptions,
+              ),
+              {
+                signal,
+              },
+            );
           },
           { signal },
         );
