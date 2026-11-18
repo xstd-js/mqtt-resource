@@ -29,8 +29,9 @@ export class MqttResource extends Resource implements HavingMqttResourceAbilitie
 
       const client: MqttClient = await openMqttClient(signal, url.toString(), options);
 
-      // One 'message' listener is registered per active subscription; their lifecycle is
-      // managed by the subscription resources, so no arbitrary cap must apply.
+      // One 'message' listener is registered per active listener (two listeners sharing the
+      // same underlying subscription register two); their lifecycle is managed by the
+      // subscription resources, so no arbitrary cap must apply.
       client.setMaxListeners(0);
 
       if (signal?.aborted || !client.connected) {
